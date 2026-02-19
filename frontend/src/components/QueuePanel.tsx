@@ -67,7 +67,7 @@ export default function QueuePanel({ queue, onRemove, onReorder }: Props) {
               </button>
               <button
                 onClick={() => onRemove(item.id)}
-                className="p-1 rounded text-white/30 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                className="p-1 rounded text-white/30 hover:text-[var(--accent-text)] hover:bg-accent-500/10 transition-colors"
                 title="Remove"
               >
                 <X className="w-3.5 h-3.5" />

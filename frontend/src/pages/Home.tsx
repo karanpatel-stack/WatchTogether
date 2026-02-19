@@ -70,19 +70,19 @@ export default function Home() {
     <div className="min-h-screen flex flex-col items-center justify-center relative overflow-hidden">
       {/* Background Effects */}
       <div className="absolute inset-0 bg-[#0a0a14]" />
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] rounded-full bg-red-900/[0.07] blur-[150px] pointer-events-none" />
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-red-800/[0.04] blur-[120px] pointer-events-none" />
-      <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[400px] h-[200px] bg-red-900/[0.06] blur-[100px] pointer-events-none" />
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] rounded-full blur-[150px] pointer-events-none" style={{ background: 'var(--orb-primary)' }} />
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] blur-[120px] pointer-events-none" style={{ background: 'var(--orb-secondary)' }} />
+      <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[400px] h-[200px] blur-[100px] pointer-events-none" style={{ background: 'var(--orb-primary)' }} />
 
       {/* Content */}
       <div className="relative z-10 w-full max-w-md px-6 animate-fade-in">
         {/* Logo */}
         <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-red-600/20 to-red-900/20 border border-red-500/10 mb-5 shadow-glow-red-sm">
-            <Tv className="w-8 h-8 text-red-500" />
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-accent-600/20 border border-accent-500/10 mb-5 shadow-glow-accent-sm">
+            <Tv className="w-8 h-8 text-accent-500" />
           </div>
           <h1 className="text-4xl font-black tracking-tight text-white mb-2">
-            WATCH<span className="text-red-500">PARTY</span>
+            WATCH<span className="text-accent-500">PARTY</span>
           </h1>
           <p className="text-sm font-medium tracking-[0.25em] uppercase text-white/30">
             Watch Together, Anywhere
@@ -101,13 +101,13 @@ export default function Home() {
             onKeyDown={(e) => handleKeyDown(e, 'create')}
             placeholder="Enter display name..."
             maxLength={20}
-            className="w-full bg-white/[0.04] border border-white/[0.08] backdrop-blur-sm rounded-xl px-4 py-3.5 text-white placeholder-white/20 text-sm font-medium transition-all duration-200 focus:border-red-500/40 focus:bg-white/[0.06] focus:shadow-glow-red-sm hover:border-white/[0.12]"
+            className="w-full bg-white/[0.04] border border-white/[0.08] backdrop-blur-sm rounded-xl px-4 py-3.5 text-white placeholder-white/20 text-sm font-medium transition-all duration-200 focus:border-accent-500/40 focus:bg-white/[0.06] focus:shadow-glow-accent-sm hover:border-white/[0.12]"
           />
 
           <button
             onClick={handleCreate}
             disabled={isCreating}
-            className="w-full mt-4 bg-gradient-to-r from-red-700 to-red-600 hover:from-red-600 hover:to-red-500 text-white font-semibold py-3.5 rounded-xl transition-all duration-200 shadow-lg shadow-red-900/30 hover:shadow-red-800/40 hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            className="w-full mt-4 bg-gradient-to-r from-accent-700 to-accent-600 hover:from-accent-600 hover:to-accent-500 text-white font-semibold py-3.5 rounded-xl transition-all duration-200 shadow-lg shadow-accent-900/30 hover:shadow-accent-800/40 hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             {isCreating ? (
               <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -140,7 +140,7 @@ export default function Home() {
               onKeyDown={(e) => handleKeyDown(e, 'join')}
               placeholder="XXXXXX"
               maxLength={6}
-              className="flex-1 bg-white/[0.04] border border-white/[0.08] backdrop-blur-sm rounded-xl px-4 py-3.5 text-white placeholder-white/20 text-sm font-mono font-semibold tracking-[0.2em] text-center transition-all duration-200 focus:border-red-500/40 focus:bg-white/[0.06] focus:shadow-glow-red-sm hover:border-white/[0.12] uppercase"
+              className="flex-1 bg-white/[0.04] border border-white/[0.08] backdrop-blur-sm rounded-xl px-4 py-3.5 text-white placeholder-white/20 text-sm font-mono font-semibold tracking-[0.2em] text-center transition-all duration-200 focus:border-accent-500/40 focus:bg-white/[0.06] focus:shadow-glow-accent-sm hover:border-white/[0.12] uppercase"
             />
             <button
               onClick={handleJoin}
@@ -161,7 +161,7 @@ export default function Home() {
 
         {/* Error */}
         {error && (
-          <div className="mt-4 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 text-red-400 text-sm text-center animate-slide-up">
+          <div className="mt-4 bg-accent-500/10 border border-accent-500/20 rounded-xl px-4 py-3 text-[var(--accent-text)] text-sm text-center animate-slide-up">
             {error}
           </div>
         )}

@@ -115,8 +115,8 @@ export default function CommentsPanel({ videoId }: Props) {
   if (error) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center text-white/20 p-6">
-        <AlertCircle className="w-10 h-10 mb-3 opacity-40 text-red-400/50" />
-        <p className="text-sm font-medium text-red-400/60">{error}</p>
+        <AlertCircle className="w-10 h-10 mb-3 opacity-40 text-[var(--accent-text)]" />
+        <p className="text-sm font-medium text-[var(--accent-text)] opacity-60">{error}</p>
         <button
           onClick={() => fetchComments(videoId, sortBy)}
           className="mt-3 px-4 py-1.5 text-xs font-medium rounded-lg bg-white/[0.06] hover:bg-white/[0.1] text-white/50 hover:text-white/70 transition-colors"

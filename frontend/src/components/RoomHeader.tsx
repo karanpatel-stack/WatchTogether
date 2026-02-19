@@ -18,14 +18,14 @@ export default function RoomHeader({ roomId, isHost, userCount, onLeave }: Props
   }
 
   return (
-    <header className="flex items-center justify-between px-4 py-3 border-b border-white/[0.10] bg-white/[0.07] backdrop-blur-xl shadow-[0_1px_20px_rgba(0,0,0,0.3)]">
+    <header className="flex items-center justify-between px-4 py-3 border-b border-panel bg-panel backdrop-blur-xl shadow-[0_1px_20px_rgba(0,0,0,0.3)]">
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-red-600/20 to-red-900/20 border border-red-500/10 flex items-center justify-center">
-            <Tv className="w-4 h-4 text-red-500" />
+          <div className="w-8 h-8 rounded-lg bg-accent-600/20 border border-accent-500/10 flex items-center justify-center">
+            <Tv className="w-4 h-4 text-accent-500" />
           </div>
           <span className="text-sm font-bold text-white tracking-tight">
-            WATCH<span className="text-red-500">PARTY</span>
+            WATCH<span className="text-accent-500">PARTY</span>
           </span>
         </div>
 
@@ -59,7 +59,7 @@ export default function RoomHeader({ roomId, isHost, userCount, onLeave }: Props
 
         <button
           onClick={onLeave}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-white/40 hover:text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 transition-all text-xs font-medium"
+          className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-white/40 hover:text-[var(--accent-text)] hover:bg-accent-500/10 border border-transparent hover:border-accent-500/20 transition-all text-xs font-medium"
         >
           <LogOut className="w-3.5 h-3.5" />
           <span className="hidden sm:inline">Leave</span>

@@ -9,9 +9,10 @@ import RoomHeader from '../components/RoomHeader'
 import VideoUrlInput from '../components/VideoUrlInput'
 import QueuePanel from '../components/QueuePanel'
 import CommentsPanel from '../components/CommentsPanel'
-import { MessageSquare, Users, X, ListMusic, MessageCircle } from 'lucide-react'
+import SettingsPanel from '../components/SettingsPanel'
+import { MessageSquare, Users, X, ListMusic, MessageCircle, Settings } from 'lucide-react'
 
-type SidebarTab = 'chat' | 'people' | 'queue' | 'comments'
+type SidebarTab = 'chat' | 'people' | 'queue' | 'comments' | 'settings'
 
 export default function Room() {
   const { roomId } = useParams<{ roomId: string }>()
@@ -228,7 +229,7 @@ export default function Room() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#0a0a14]">
         <div className="flex flex-col items-center gap-4">
-          <div className="w-10 h-10 border-3 border-red-500/30 border-t-red-500 rounded-full animate-spin" />
+          <div className="w-10 h-10 border-3 border-accent-500/30 border-t-accent-500 rounded-full animate-spin" />
           <p className="text-white/40 text-sm">Connecting to room...</p>
         </div>
       </div>
@@ -239,13 +240,13 @@ export default function Room() {
     <button
       onClick={() => switchTab(tab)}
       className={`flex-1 py-3 text-xs font-semibold uppercase tracking-wider transition-colors flex items-center justify-center gap-2 ${
-        activeTab === tab ? 'text-red-400 border-b-2 border-red-500' : 'text-white/30 hover:text-white/50'
+        activeTab === tab ? 'text-[var(--accent-text)] border-b-2 border-accent-500' : 'text-white/30 hover:text-white/50'
       }`}
     >
       {icon}
       {label}
       {badge && badge > 0 && activeTab !== tab ? (
-        <span className="bg-red-500 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">
+        <span className="bg-accent-500 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">
           {badge > 9 ? '9+' : badge}
         </span>
       ) : null}
@@ -256,13 +257,13 @@ export default function Room() {
     <button
       onClick={() => switchMobileTab(tab)}
       className={`flex-1 py-3 flex items-center justify-center gap-2 text-xs font-semibold uppercase tracking-wider transition-colors relative ${
-        mobileTab === tab ? 'text-red-400' : 'text-white/30'
+        mobileTab === tab ? 'text-[var(--accent-text)]' : 'text-white/30'
       }`}
     >
       {icon}
       {label}
       {badge && badge > 0 ? (
-        <span className="absolute top-2 right-1/4 bg-red-500 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
+        <span className="absolute top-2 right-1/4 bg-accent-500 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
           {badge > 9 ? '9+' : badge}
         </span>
       ) : null}
@@ -280,6 +281,8 @@ export default function Room() {
         return <QueuePanel queue={queue} onRemove={handleQueueRemove} onReorder={handleQueueReorder} />
       case 'comments':
         return <CommentsPanel videoId={videoState.videoId} />
+      case 'settings':
+        return <SettingsPanel />
       default:
         return null
     }
@@ -291,6 +294,7 @@ export default function Room() {
       case 'people': return `People (${users.length})`
       case 'queue': return `Queue (${queue.length})`
       case 'comments': return 'Comments'
+      case 'settings': return 'Settings'
       default: return ''
     }
   }
@@ -298,9 +302,9 @@ export default function Room() {
   return (
     <div className="h-screen flex flex-col bg-[#0a0a14] overflow-hidden relative">
       {/* Ambient gradient orbs for glassmorphism backdrop */}
-      <div className="absolute top-0 right-0 w-[600px] h-[600px] rounded-full bg-red-900/[0.08] blur-[180px] pointer-events-none" />
-      <div className="absolute bottom-0 left-1/4 w-[500px] h-[500px] rounded-full bg-red-800/[0.06] blur-[150px] pointer-events-none" />
-      <div className="absolute top-1/2 right-1/3 w-[400px] h-[400px] rounded-full bg-purple-900/[0.05] blur-[140px] pointer-events-none" />
+      <div className="absolute top-0 right-0 w-[600px] h-[600px] rounded-full blur-[180px] pointer-events-none" style={{ background: 'var(--orb-primary)' }} />
+      <div className="absolute bottom-0 left-1/4 w-[500px] h-[500px] rounded-full blur-[150px] pointer-events-none" style={{ background: 'var(--orb-secondary)' }} />
+      <div className="absolute top-1/2 right-1/3 w-[400px] h-[400px] rounded-full blur-[140px] pointer-events-none" style={{ background: 'var(--orb-tertiary)' }} />
 
       <RoomHeader
         roomId={roomId!}
@@ -340,13 +344,14 @@ export default function Room() {
         </div>
 
         {/* Sidebar */}
-        <div className="hidden lg:flex flex-col w-[380px] border-l border-white/[0.10] bg-white/[0.07] backdrop-blur-xl shadow-[-4px_0_30px_rgba(0,0,0,0.3)]">
+        <div className="hidden lg:flex flex-col w-[380px] border-l border-panel bg-panel backdrop-blur-xl shadow-[-4px_0_30px_rgba(0,0,0,0.3)]">
           {/* Sidebar Tabs */}
-          <div className="flex border-b border-white/[0.10]">
+          <div className="flex border-b border-panel">
             {tabButton('chat', 'Chat', <MessageSquare className="w-3.5 h-3.5" />, unreadCount)}
             {tabButton('people', `People (${users.length})`, <Users className="w-3.5 h-3.5" />)}
             {tabButton('queue', `Queue (${queue.length})`, <ListMusic className="w-3.5 h-3.5" />)}
             {tabButton('comments', 'Comments', <MessageCircle className="w-3.5 h-3.5" />)}
+            {tabButton('settings', '', <Settings className="w-3.5 h-3.5" />)}
           </div>
 
           {renderTabContent()}
@@ -356,8 +361,8 @@ export default function Room() {
         {mobileTab && (
           <div className="lg:hidden fixed inset-0 z-50 flex">
             <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setMobileTab(null)} />
-            <div className="relative ml-auto w-full max-w-sm bg-white/[0.07] backdrop-blur-xl border-l border-white/[0.10] flex flex-col animate-slide-up shadow-[-4px_0_30px_rgba(0,0,0,0.4)]">
-              <div className="flex items-center justify-between p-4 border-b border-white/[0.10]">
+            <div className="relative ml-auto w-full max-w-sm bg-panel backdrop-blur-xl border-l border-panel flex flex-col animate-slide-up shadow-[-4px_0_30px_rgba(0,0,0,0.4)]">
+              <div className="flex items-center justify-between p-4 border-b border-panel">
                 <span className="text-sm font-semibold text-white/60 uppercase tracking-wider">
                   {getTabLabel()}
                 </span>
@@ -372,11 +377,12 @@ export default function Room() {
       </div>
 
       {/* Mobile Bottom Bar */}
-      <div className="lg:hidden flex border-t border-white/[0.10] bg-white/[0.07] backdrop-blur-xl shadow-[0_-1px_20px_rgba(0,0,0,0.3)]">
+      <div className="lg:hidden flex border-t border-panel bg-panel backdrop-blur-xl shadow-[0_-1px_20px_rgba(0,0,0,0.3)]">
         {mobileTabButton('chat', 'Chat', <MessageSquare className="w-4 h-4" />, unreadCount)}
         {mobileTabButton('people', 'People', <Users className="w-4 h-4" />)}
         {mobileTabButton('queue', 'Queue', <ListMusic className="w-4 h-4" />)}
         {mobileTabButton('comments', 'Comments', <MessageCircle className="w-4 h-4" />)}
+        {mobileTabButton('settings', 'Settings', <Settings className="w-4 h-4" />)}
       </div>
     </div>
   )

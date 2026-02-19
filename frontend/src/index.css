@@ -2,6 +2,22 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --accent-400: 248 113 113;
+  --accent-500: 239 68 68;
+  --accent-600: 220 38 38;
+  --accent-700: 185 28 28;
+  --accent-800: 153 27 27;
+  --accent-900: 127 29 29;
+  --accent-glow: rgba(220, 38, 38, 0.15);
+  --accent-text: #f87171;
+  --accent-border: rgba(239, 68, 68, 0.25);
+  --orb-primary: rgba(127, 29, 29, 0.08);
+  --orb-secondary: rgba(153, 27, 27, 0.06);
+  --orb-tertiary: rgba(88, 28, 135, 0.05);
+  --panel-opacity: 0.07;
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -50,4 +66,65 @@ input, textarea {
   .text-balance {
     text-wrap: balance;
   }
+}
+
+@layer components {
+  .bg-panel {
+    background-color: rgba(255, 255, 255, var(--panel-opacity));
+  }
+  .border-panel {
+    border-color: rgba(255, 255, 255, calc(var(--panel-opacity) + 0.03));
+  }
+}
+
+/* Range slider styling */
+input[type='range'] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+input[type='range']::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: rgb(var(--accent-500));
+  margin-top: -6px;
+  box-shadow: 0 0 10px var(--accent-glow);
+}
+
+input[type='range']::-moz-range-track {
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+input[type='range']::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: rgb(var(--accent-500));
+  border: none;
+  box-shadow: 0 0 10px var(--accent-glow);
+}
+
+/* Emoji picker overrides */
+em-emoji-picker {
+  --rgb-background: 20, 20, 30;
+  --rgb-input: 255, 255, 255;
+  --background-rgb: 20, 20, 30;
+  --border-color: rgba(255, 255, 255, 0.1);
+  --color-border: rgba(255, 255, 255, 0.1);
+  --color-border-over: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 1rem !important;
 }

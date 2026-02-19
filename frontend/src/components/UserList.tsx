@@ -16,7 +16,7 @@ export default function UserList({ users, hostId, currentUserId }: Props) {
             key={user.id}
             className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors ${
               user.id === currentUserId
-                ? 'bg-red-500/[0.06] border border-red-500/10'
+                ? 'bg-accent-500/[0.06] border border-accent-500/10'
                 : 'hover:bg-white/[0.02]'
             }`}
           >

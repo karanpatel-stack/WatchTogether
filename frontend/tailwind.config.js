@@ -18,10 +18,13 @@ export default {
           950: '#0f0f1a',
         },
         accent: {
-          DEFAULT: '#dc2626',
-          hover: '#ef4444',
-          muted: '#991b1b',
-          glow: 'rgba(220, 38, 38, 0.15)',
+          400: 'rgb(var(--accent-400) / <alpha-value>)',
+          500: 'rgb(var(--accent-500) / <alpha-value>)',
+          600: 'rgb(var(--accent-600) / <alpha-value>)',
+          700: 'rgb(var(--accent-700) / <alpha-value>)',
+          800: 'rgb(var(--accent-800) / <alpha-value>)',
+          900: 'rgb(var(--accent-900) / <alpha-value>)',
+          DEFAULT: 'rgb(var(--accent-600) / <alpha-value>)',
         },
       },
       fontFamily: {
@@ -29,8 +32,8 @@ export default {
         mono: ['JetBrains Mono', 'Fira Code', 'monospace'],
       },
       boxShadow: {
-        'glow-red': '0 0 60px rgba(220, 38, 38, 0.15), 0 0 120px rgba(220, 38, 38, 0.05)',
-        'glow-red-sm': '0 0 20px rgba(220, 38, 38, 0.2)',
+        'glow-accent': '0 0 60px var(--accent-glow), 0 0 120px var(--accent-glow)',
+        'glow-accent-sm': '0 0 20px var(--accent-glow)',
         'inner-light': 'inset 0 1px 0 rgba(255, 255, 255, 0.05)',
       },
       animation: {
