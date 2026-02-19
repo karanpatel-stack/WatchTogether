@@ -59,6 +59,11 @@ export default function Room() {
         })
       })
 
+      socket.once('connect_error', () => {
+        socket.disconnect()
+        setTimeout(() => socket.connect(), 2000)
+      })
+
       socket.connect()
     }
 
