@@ -47,15 +47,19 @@ export default function Room() {
         navigate('/')
         return
       }
-      socket.connect()
-      socket.emit('room:join', { roomId: roomId!, userName: storedName }, (response: { success: boolean; error?: string; userId?: string }) => {
-        if (!response.success) {
-          navigate('/')
-        } else {
-          myUserId.current = response.userId || ''
-          localStorage.setItem('wp_userId', myUserId.current)
-        }
+
+      socket.once('connect', () => {
+        socket.emit('room:join', { roomId: roomId!, userName: storedName }, (response: { success: boolean; error?: string; userId?: string }) => {
+          if (!response.success) {
+            navigate('/')
+          } else {
+            myUserId.current = response.userId || ''
+            localStorage.setItem('wp_userId', myUserId.current)
+          }
+        })
       })
+
+      socket.connect()
     }
 
     socket.on('room:state', handleRoomState)
