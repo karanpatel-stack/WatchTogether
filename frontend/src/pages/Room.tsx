@@ -296,7 +296,12 @@ export default function Room() {
   }
 
   return (
-    <div className="h-screen flex flex-col bg-[#0a0a14] overflow-hidden">
+    <div className="h-screen flex flex-col bg-[#0a0a14] overflow-hidden relative">
+      {/* Ambient gradient orbs for glassmorphism backdrop */}
+      <div className="absolute top-0 right-0 w-[600px] h-[600px] rounded-full bg-red-900/[0.08] blur-[180px] pointer-events-none" />
+      <div className="absolute bottom-0 left-1/4 w-[500px] h-[500px] rounded-full bg-red-800/[0.06] blur-[150px] pointer-events-none" />
+      <div className="absolute top-1/2 right-1/3 w-[400px] h-[400px] rounded-full bg-purple-900/[0.05] blur-[140px] pointer-events-none" />
+
       <RoomHeader
         roomId={roomId!}
         isHost={isHost}
@@ -335,9 +340,9 @@ export default function Room() {
         </div>
 
         {/* Sidebar */}
-        <div className="hidden lg:flex flex-col w-[380px] border-l border-white/[0.08] bg-white/[0.05] backdrop-blur-xl">
+        <div className="hidden lg:flex flex-col w-[380px] border-l border-white/[0.10] bg-white/[0.07] backdrop-blur-xl shadow-[-4px_0_30px_rgba(0,0,0,0.3)]">
           {/* Sidebar Tabs */}
-          <div className="flex border-b border-white/[0.08]">
+          <div className="flex border-b border-white/[0.10]">
             {tabButton('chat', 'Chat', <MessageSquare className="w-3.5 h-3.5" />, unreadCount)}
             {tabButton('people', `People (${users.length})`, <Users className="w-3.5 h-3.5" />)}
             {tabButton('queue', `Queue (${queue.length})`, <ListMusic className="w-3.5 h-3.5" />)}
@@ -351,8 +356,8 @@ export default function Room() {
         {mobileTab && (
           <div className="lg:hidden fixed inset-0 z-50 flex">
             <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setMobileTab(null)} />
-            <div className="relative ml-auto w-full max-w-sm bg-white/[0.05] backdrop-blur-xl border-l border-white/[0.08] flex flex-col animate-slide-up">
-              <div className="flex items-center justify-between p-4 border-b border-white/[0.08]">
+            <div className="relative ml-auto w-full max-w-sm bg-white/[0.07] backdrop-blur-xl border-l border-white/[0.10] flex flex-col animate-slide-up shadow-[-4px_0_30px_rgba(0,0,0,0.4)]">
+              <div className="flex items-center justify-between p-4 border-b border-white/[0.10]">
                 <span className="text-sm font-semibold text-white/60 uppercase tracking-wider">
                   {getTabLabel()}
                 </span>
@@ -367,7 +372,7 @@ export default function Room() {
       </div>
 
       {/* Mobile Bottom Bar */}
-      <div className="lg:hidden flex border-t border-white/[0.08] bg-white/[0.05] backdrop-blur-xl">
+      <div className="lg:hidden flex border-t border-white/[0.10] bg-white/[0.07] backdrop-blur-xl shadow-[0_-1px_20px_rgba(0,0,0,0.3)]">
         {mobileTabButton('chat', 'Chat', <MessageSquare className="w-4 h-4" />, unreadCount)}
         {mobileTabButton('people', 'People', <Users className="w-4 h-4" />)}
         {mobileTabButton('queue', 'Queue', <ListMusic className="w-4 h-4" />)}
