@@ -9,7 +9,7 @@ interface Props {
 }
 
 export default function UserList({ users, hostId, currentUserId }: Props) {
-  const { speakingUsers, isInVoice, isMuted } = useVoice()
+  const { speakingUsers, voiceUsers, isInVoice, isMuted } = useVoice()
 
   return (
     <div className="flex-1 overflow-y-auto p-4">
@@ -17,7 +17,7 @@ export default function UserList({ users, hostId, currentUserId }: Props) {
         {users.map((user) => {
           const isSpeaking = speakingUsers.has(user.id)
           const isCurrentUserMuted = user.id === currentUserId && isMuted
-          const isUserInVoice = user.id === currentUserId ? isInVoice : speakingUsers.has(user.id) || false
+          const isUserInVoice = user.id === currentUserId ? isInVoice : voiceUsers.has(user.id)
 
           return (
             <div

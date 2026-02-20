@@ -31,6 +31,7 @@ export type VoiceEventType =
   | 'speaking-change'
   | 'muted-change'
   | 'voice-state-change'
+  | 'voice-users-change'
   | 'input-devices-change'
 
 export type VoiceEventHandler = (data?: unknown) => void
@@ -49,6 +50,7 @@ export class VoiceManager {
   private isInVoice = false
   private settings: VoiceSettings
   private listeners = new Map<VoiceEventType, Set<VoiceEventHandler>>()
+  private voiceUsers = new Set<string>()
   private pttKeyDown = false
   private pttBound = false
   private iceServers: RTCIceServer[] = [
@@ -78,18 +80,23 @@ export class VoiceManager {
   private setupSocketListeners() {
     this.socket.on('voice:active-users' as string, (data: { userIds: string[] }) => {
       for (const userId of data.userIds) {
+        this.voiceUsers.add(userId)
         this.createPeer(userId, true)
       }
+      this.emit('voice-users-change')
     })
 
-    this.socket.on('voice:user-joined' as string, (_data: { userId: string }) => {
-      // New user joined — they will initiate, we just wait for their offer
-      // (they get active-users list and initiate to us)
+    this.socket.on('voice:user-joined' as string, (data: { userId: string }) => {
+      // Track them as a voice user — they will initiate the peer connection to us
+      this.voiceUsers.add(data.userId)
+      this.emit('voice-users-change')
     })
 
     this.socket.on('voice:user-left' as string, (data: { userId: string }) => {
       this.destroyPeer(data.userId)
+      this.voiceUsers.delete(data.userId)
       this.speakingUsers.delete(data.userId)
+      this.emit('voice-users-change')
       this.emit('speaking-change')
       this.emit('voice-state-change')
     })
@@ -134,6 +141,10 @@ export class VoiceManager {
     try {
       await this.fetchIceServers()
       this.audioContext = new AudioContext()
+      // Resume AudioContext in case browser suspended it (no user gesture yet)
+      if (this.audioContext.state === 'suspended') {
+        await this.audioContext.resume()
+      }
 
       this.localStream = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -161,6 +172,7 @@ export class VoiceManager {
       this.localStream.getAudioTracks().forEach((t) => (t.enabled = false))
 
       this.isInVoice = true
+      this.voiceUsers.add(this.socket.id!)
       this.socket.emit('voice:join' as string)
 
       this.startLocalVAD()
@@ -203,12 +215,14 @@ export class VoiceManager {
     this.inputGainNode = null
     this.analyserNode = null
     this.speakingUsers.clear()
+    this.voiceUsers.clear()
     this.isInVoice = false
     this.isMuted = true
 
     this.emit('voice-state-change')
     this.emit('muted-change')
     this.emit('speaking-change')
+    this.emit('voice-users-change')
   }
 
   private createPeer(userId: string, initiator: boolean, offer?: RTCSessionDescriptionInit) {
@@ -250,17 +264,26 @@ export class VoiceManager {
     })
 
     peer.on('stream', (stream: MediaStream) => {
+      // Set stream on audio element as fallback
       audioEl.srcObject = stream
 
       // Connect to Web Audio API for volume control + VAD
       try {
+        // Resume AudioContext if suspended (stream arrival = good time to try)
+        if (this.audioContext!.state === 'suspended') {
+          this.audioContext!.resume()
+        }
         const source = this.audioContext!.createMediaStreamSource(stream)
         conn.sourceNode = source
         source.connect(gainNode)
         gainNode.connect(analyser)
         analyser.connect(this.audioContext!.destination)
+        // Mute HTML audio element — Web Audio API handles playback now
+        // Without this, audio plays twice (echo/double volume)
+        audioEl.muted = true
       } catch (e) {
-        console.warn('Failed to setup audio processing for peer:', e)
+        console.warn('Failed to setup audio processing for peer, falling back to audio element:', e)
+        // Audio element remains unmuted as fallback
       }
 
       this.startRemoteVAD()
@@ -311,6 +334,10 @@ export class VoiceManager {
 
   toggleMute() {
     if (this.settings.pushToTalk) return
+    // Resume AudioContext on user gesture if it was suspended
+    if (this.audioContext?.state === 'suspended') {
+      this.audioContext.resume()
+    }
     this.setMuted(!this.isMuted)
   }
 
@@ -547,6 +574,7 @@ export class VoiceManager {
   getIsMuted() { return this.isMuted }
   getIsInVoice() { return this.isInVoice }
   getSpeakingUsers() { return new Set(this.speakingUsers) }
+  getVoiceUsers() { return new Set(this.voiceUsers) }
   getSettings() { return { ...this.settings } }
   getPeerCount() { return this.peers.size }
 

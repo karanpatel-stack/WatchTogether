@@ -7,6 +7,7 @@ interface VoiceContextValue {
   isMuted: boolean
   isInVoice: boolean
   speakingUsers: Set<string>
+  voiceUsers: Set<string>
   voiceSettings: VoiceSettings
   inputDevices: MediaDeviceInfo[]
   toggleMute: () => void
@@ -38,6 +39,7 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
   const [isMuted, setIsMuted] = useState(true)
   const [isInVoice, setIsInVoice] = useState(false)
   const [speakingUsers, setSpeakingUsers] = useState<Set<string>>(new Set())
+  const [voiceUsers, setVoiceUsers] = useState<Set<string>>(new Set())
   const [voiceSettings, setVoiceSettingsState] = useState<VoiceSettings>(loadSettings)
   const [inputDevices, setInputDevices] = useState<MediaDeviceInfo[]>([])
 
@@ -55,6 +57,10 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
 
     manager.on('speaking-change', () => {
       setSpeakingUsers(manager.getSpeakingUsers())
+    })
+
+    manager.on('voice-users-change', () => {
+      setVoiceUsers(manager.getVoiceUsers())
     })
 
     // Enumerate input devices
@@ -102,6 +108,7 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
         isMuted,
         isInVoice,
         speakingUsers,
+        voiceUsers,
         voiceSettings,
         inputDevices,
         toggleMute,
