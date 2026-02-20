@@ -2,10 +2,10 @@ import { useState } from 'react'
 import { useTheme } from '../lib/ThemeContext'
 import { useVoice } from '../lib/VoiceContext'
 import MicLevelMeter from './MicLevelMeter'
-import { Palette, SlidersHorizontal, Mic, Volume2, Keyboard } from 'lucide-react'
+import { Palette, SlidersHorizontal, Mic, Volume2, Keyboard, Sparkles } from 'lucide-react'
 
 export default function SettingsPanel() {
-  const { currentTheme, setThemeById, panelOpacity, setPanelOpacity, themes } = useTheme()
+  const { currentTheme, setThemeById, panelOpacity, setPanelOpacity, themes, ambientEnabled, setAmbientEnabled } = useTheme()
   const { voiceSettings, setVoiceSettings, inputDevices } = useVoice()
   const [rebindingPTT, setRebindingPTT] = useState(false)
 
@@ -178,13 +178,44 @@ export default function SettingsPanel() {
         </div>
       </div>
 
-      {/* Theme Selector */}
+      {/* Ambient Colors */}
       <div>
+        <div className="flex items-center gap-2 mb-3">
+          <Sparkles className="w-4 h-4 text-white/40" />
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-white/40">
+            Ambient Colors
+          </h3>
+        </div>
+        <div className="flex items-center justify-between">
+          <div>
+            <label className="text-[11px] text-white/30 font-medium">Video-Based Theme</label>
+            <p className="text-[10px] text-white/15 mt-0.5">Colors adapt to the playing video</p>
+          </div>
+          <button
+            onClick={() => setAmbientEnabled(!ambientEnabled)}
+            className={`relative w-9 h-5 rounded-full transition-colors ${
+              ambientEnabled ? 'bg-accent-500' : 'bg-white/[0.1]'
+            }`}
+          >
+            <span
+              className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${
+                ambientEnabled ? 'translate-x-4' : 'translate-x-0.5'
+              }`}
+            />
+          </button>
+        </div>
+      </div>
+
+      {/* Theme Selector */}
+      <div className={ambientEnabled ? 'opacity-40 pointer-events-none' : ''}>
         <div className="flex items-center gap-2 mb-3">
           <Palette className="w-4 h-4 text-white/40" />
           <h3 className="text-xs font-semibold uppercase tracking-wider text-white/40">
             Color Theme
           </h3>
+          {ambientEnabled && (
+            <span className="text-[10px] text-white/20 ml-auto">Disabled while Ambient Colors is on</span>
+          )}
         </div>
         <div className="grid grid-cols-2 gap-2">
           {themes.map((theme) => {

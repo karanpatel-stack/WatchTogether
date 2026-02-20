@@ -11,7 +11,10 @@ import QueuePanel from '../components/QueuePanel'
 import CommentsPanel from '../components/CommentsPanel'
 import SettingsPanel from '../components/SettingsPanel'
 import VoiceControls from '../components/VoiceControls'
+import AmbientBackground from '../components/AmbientBackground'
 import { VoiceProvider, useVoice } from '../lib/VoiceContext'
+import { useTheme } from '../lib/ThemeContext'
+import { useAmbientColors } from '../hooks/useAmbientColors'
 import { MessageSquare, Users, X, ListMusic, MessageCircle, Settings } from 'lucide-react'
 
 type SidebarTab = 'chat' | 'people' | 'queue' | 'comments' | 'settings'
@@ -20,6 +23,7 @@ function RoomContent() {
   const { roomId } = useParams<{ roomId: string }>()
   const navigate = useNavigate()
   const { leaveVoice } = useVoice()
+  const { ambientEnabled } = useTheme()
 
   const [users, setUsers] = useState<User[]>([])
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -43,6 +47,8 @@ function RoomContent() {
   const connectedRef = useRef(false)
   const joinedRef = useRef(false)
   const isHost = hostId === socket.id
+
+  useAmbientColors(videoState.videoId)
 
   const handleRoomState = useCallback((state: RoomState) => {
     setUsers(state.users)
@@ -316,10 +322,13 @@ function RoomContent() {
 
   return (
     <div className="h-screen flex flex-col bg-[#0a0a14] overflow-hidden relative">
+      {/* Page-level ambient glow — bleeds across header, sidebar, everything */}
+      <AmbientBackground videoId={videoState.videoId} enabled={ambientEnabled} />
+
       {/* Ambient gradient orbs for glassmorphism backdrop */}
-      <div className="absolute top-0 right-0 w-[600px] h-[600px] rounded-full blur-[180px] pointer-events-none" style={{ background: 'var(--orb-primary)' }} />
-      <div className="absolute bottom-0 left-1/4 w-[500px] h-[500px] rounded-full blur-[150px] pointer-events-none" style={{ background: 'var(--orb-secondary)' }} />
-      <div className="absolute top-1/2 right-1/3 w-[400px] h-[400px] rounded-full blur-[140px] pointer-events-none" style={{ background: 'var(--orb-tertiary)' }} />
+      <div className="absolute top-0 right-0 w-[600px] h-[600px] rounded-full blur-[180px] pointer-events-none transition-[background] duration-700" style={{ background: 'var(--orb-primary)' }} />
+      <div className="absolute bottom-0 left-1/4 w-[500px] h-[500px] rounded-full blur-[150px] pointer-events-none transition-[background] duration-700" style={{ background: 'var(--orb-secondary)' }} />
+      <div className="absolute top-1/2 right-1/3 w-[400px] h-[400px] rounded-full blur-[140px] pointer-events-none transition-[background] duration-700" style={{ background: 'var(--orb-tertiary)' }} />
 
       <RoomHeader
         roomId={roomId!}
@@ -361,7 +370,7 @@ function RoomContent() {
         </div>
 
         {/* Sidebar */}
-        <div className="hidden lg:flex flex-col w-[380px] border-l border-panel bg-panel backdrop-blur-xl shadow-[-4px_0_30px_rgba(0,0,0,0.3)]">
+        <div className="hidden lg:flex flex-col w-[380px] min-h-0 border-l border-panel bg-panel backdrop-blur-xl shadow-[-4px_0_30px_rgba(0,0,0,0.3)]">
           {/* Sidebar Tabs */}
           <div className="flex border-b border-panel">
             {tabButton('chat', 'Chat', <MessageSquare className="w-3.5 h-3.5" />, unreadCount)}
