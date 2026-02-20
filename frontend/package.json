@@ -11,11 +11,13 @@
   "dependencies": {
     "@emoji-mart/data": "^1.2.1",
     "@emoji-mart/react": "^1.1.1",
+    "@types/simple-peer": "^9.11.9",
     "lucide-react": "^0.436.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.26.1",
     "react-youtube": "^10.1.0",
+    "simple-peer": "^9.11.1",
     "socket.io-client": "^4.7.5"
   },
   "devDependencies": {
@@ -26,6 +28,7 @@
     "postcss": "^8.4.41",
     "tailwindcss": "^3.4.10",
     "typescript": "^5.5.4",
-    "vite": "^5.4.2"
+    "vite": "^5.4.2",
+    "vite-plugin-node-polyfills": "^0.25.0"
   }
 }

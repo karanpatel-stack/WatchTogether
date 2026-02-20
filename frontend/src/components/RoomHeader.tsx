@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Tv, Copy, Check, LogOut, Crown, Users } from 'lucide-react'
+import { Tv, Copy, Check, LogOut, Crown, Users, Mic, MicOff } from 'lucide-react'
+import { useVoice } from '../lib/VoiceContext'
 
 interface Props {
   roomId: string
@@ -10,6 +11,7 @@ interface Props {
 
 export default function RoomHeader({ roomId, isHost, userCount, onLeave }: Props) {
   const [copied, setCopied] = useState(false)
+  const { isMuted, isInVoice, toggleMute, voiceSettings } = useVoice()
 
   const copyRoomCode = () => {
     navigator.clipboard.writeText(roomId)
@@ -56,6 +58,21 @@ export default function RoomHeader({ roomId, isHost, userCount, onLeave }: Props
           <Users className="w-3.5 h-3.5" />
           <span className="text-xs font-medium">{userCount}</span>
         </div>
+
+        {isInVoice && (
+          <button
+            onClick={toggleMute}
+            disabled={voiceSettings.pushToTalk}
+            className={`flex items-center justify-center w-8 h-8 rounded-lg border transition-all ${
+              isMuted
+                ? 'bg-red-500/10 border-red-500/20 text-red-400 hover:bg-red-500/20'
+                : 'bg-green-500/10 border-green-500/20 text-green-400 hover:bg-green-500/20'
+            } ${voiceSettings.pushToTalk ? 'opacity-50 cursor-not-allowed' : ''}`}
+            title={voiceSettings.pushToTalk ? 'Push to Talk enabled' : isMuted ? 'Unmute' : 'Mute'}
+          >
+            {isMuted ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
+          </button>
+        )}
 
         <button
           onClick={onLeave}

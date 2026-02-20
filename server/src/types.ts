@@ -28,6 +28,7 @@ export interface Room {
   queue: QueueItem[];
   messages: ChatMessage[];
   createdAt: number;
+  voiceUsers: Set<string>;
 }
 
 export interface ChatMessage {
@@ -63,7 +64,14 @@ export interface ClientToServerEvents {
   'queue:add': (data: { url: string }, callback: (response: { success: boolean; error?: string }) => void) => void;
   'queue:remove': (data: { itemId: string }) => void;
   'queue:reorder': (data: { itemId: string; newIndex: number }) => void;
+  'queue:play': (data: { itemId: string }) => void;
+  'queue:play-next': () => void;
   'chat:message': (data: { text: string }) => void;
+  'voice:join': () => void;
+  'voice:leave': () => void;
+  'voice:offer': (data: { to: string; offer: RTCSessionDescriptionInit }) => void;
+  'voice:answer': (data: { to: string; answer: RTCSessionDescriptionInit }) => void;
+  'voice:ice-candidate': (data: { to: string; candidate: RTCIceCandidateInit }) => void;
 }
 
 export interface ServerToClientEvents {
@@ -82,5 +90,11 @@ export interface ServerToClientEvents {
   'video:load': (data: { videoId: string; videoUrl: string }) => void;
   'queue:update': (data: { queue: QueueItem[] }) => void;
   'chat:message': (data: ChatMessage) => void;
+  'voice:user-joined': (data: { userId: string }) => void;
+  'voice:user-left': (data: { userId: string }) => void;
+  'voice:offer': (data: { from: string; offer: RTCSessionDescriptionInit }) => void;
+  'voice:answer': (data: { from: string; answer: RTCSessionDescriptionInit }) => void;
+  'voice:ice-candidate': (data: { from: string; candidate: RTCIceCandidateInit }) => void;
+  'voice:active-users': (data: { userIds: string[] }) => void;
   'error': (data: { message: string }) => void;
 }

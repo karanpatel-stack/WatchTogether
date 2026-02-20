@@ -56,6 +56,22 @@ const INVIDIOUS_INSTANCES = process.env.INVIDIOUS_INSTANCES
 
 const commentsCache = new Map<string, { data: unknown; expires: number }>();
 
+// Fetch video title from YouTube oEmbed API
+async function fetchVideoTitle(videoId: string): Promise<string> {
+  try {
+    const url = `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    const response = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeout);
+    if (!response.ok) return videoId;
+    const data = await response.json() as { title?: string };
+    return data.title || videoId;
+  } catch {
+    return videoId;
+  }
+}
+
 app.get('/api/comments/:videoId', async (req, res) => {
   const { videoId } = req.params;
   const sortBy = (req.query.sort_by as string) || 'top';
@@ -298,7 +314,7 @@ io.on('connection', (socket) => {
       id: nanoid(),
       videoId,
       videoUrl: data.url,
-      title: videoId, // Will be replaced by frontend display with thumbnail
+      title: videoId, // Temporary, will be updated async
       addedBy: user?.name || 'Someone',
       addedAt: Date.now(),
     };
@@ -307,6 +323,12 @@ io.on('connection', (socket) => {
     callback({ success: true });
 
     io.to(room.id).emit('queue:update', { queue: room.queue });
+
+    // Fetch real title asynchronously and update
+    fetchVideoTitle(videoId).then((title) => {
+      item.title = title;
+      io.to(room.id).emit('queue:update', { queue: room.queue });
+    });
 
     const systemMsg = addMessage(room, 'system', '');
     if (systemMsg) {
@@ -344,6 +366,66 @@ io.on('connection', (socket) => {
     io.to(room.id).emit('queue:update', { queue: room.queue });
   });
 
+  socket.on('queue:play', (data) => {
+    const room = getUserRoom(socket.id);
+    if (!room) return;
+
+    const idx = room.queue.findIndex((item) => item.id === data.itemId);
+    if (idx === -1) return;
+
+    const [item] = room.queue.splice(idx, 1);
+
+    room.videoId = item.videoId;
+    room.videoUrl = item.videoUrl;
+    room.isPlaying = false;
+    room.currentTime = 0;
+    room.lastSyncTime = Date.now();
+    room.seq++;
+
+    io.to(room.id).emit('video:load', { videoId: item.videoId, videoUrl: item.videoUrl });
+    io.to(room.id).emit('video:state-update', getVideoState(room));
+    io.to(room.id).emit('queue:update', { queue: room.queue });
+
+    const systemMsg = addMessage(room, 'system', '');
+    if (systemMsg) {
+      systemMsg.text = `Now playing from queue: ${item.title}`;
+      systemMsg.userId = 'system';
+      systemMsg.userName = 'System';
+      systemMsg.avatar = '🤖';
+      systemMsg.type = 'system';
+      io.to(room.id).emit('chat:message', systemMsg);
+    }
+  });
+
+  socket.on('queue:play-next', () => {
+    const room = getUserRoom(socket.id);
+    if (!room) return;
+    if (room.queue.length === 0) return;
+
+    const next = room.queue.shift()!;
+
+    room.videoId = next.videoId;
+    room.videoUrl = next.videoUrl;
+    room.isPlaying = false;
+    room.currentTime = 0;
+    room.lastSyncTime = Date.now();
+    room.seq++;
+
+    io.to(room.id).emit('video:load', { videoId: next.videoId, videoUrl: next.videoUrl });
+    io.to(room.id).emit('video:state-update', getVideoState(room));
+    io.to(room.id).emit('queue:update', { queue: room.queue });
+
+    const systemMsg = addMessage(room, 'system', '');
+    if (systemMsg) {
+      systemMsg.text = `Skipped to next in queue: ${next.title}`;
+      systemMsg.userId = 'system';
+      systemMsg.userName = 'System';
+      systemMsg.avatar = '🤖';
+      systemMsg.type = 'system';
+      io.to(room.id).emit('chat:message', systemMsg);
+    }
+  });
+
   socket.on('chat:message', (data) => {
     const room = getUserRoom(socket.id);
     if (!room) return;
@@ -354,7 +436,44 @@ io.on('connection', (socket) => {
     }
   });
 
+  // --- Voice signaling ---
+  socket.on('voice:join', () => {
+    const room = getUserRoom(socket.id);
+    if (!room) return;
+
+    room.voiceUsers.add(socket.id);
+    socket.to(room.id).emit('voice:user-joined', { userId: socket.id });
+    socket.emit('voice:active-users', { userIds: Array.from(room.voiceUsers).filter((id) => id !== socket.id) });
+  });
+
+  socket.on('voice:leave', () => {
+    const room = getUserRoom(socket.id);
+    if (!room) return;
+
+    room.voiceUsers.delete(socket.id);
+    socket.to(room.id).emit('voice:user-left', { userId: socket.id });
+  });
+
+  socket.on('voice:offer', (data) => {
+    io.to(data.to).emit('voice:offer', { from: socket.id, offer: data.offer });
+  });
+
+  socket.on('voice:answer', (data) => {
+    io.to(data.to).emit('voice:answer', { from: socket.id, answer: data.answer });
+  });
+
+  socket.on('voice:ice-candidate', (data) => {
+    io.to(data.to).emit('voice:ice-candidate', { from: socket.id, candidate: data.candidate });
+  });
+
   function handleDisconnect() {
+    // Clean up voice before leaving room
+    const roomBeforeLeave = getUserRoom(socket.id);
+    if (roomBeforeLeave && roomBeforeLeave.voiceUsers.has(socket.id)) {
+      roomBeforeLeave.voiceUsers.delete(socket.id);
+      socket.to(roomBeforeLeave.id).emit('voice:user-left', { userId: socket.id });
+    }
+
     const result = leaveRoom(socket.id);
     if (!result) return;
 

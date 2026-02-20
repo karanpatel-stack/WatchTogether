@@ -48,6 +48,7 @@ export function createRoom(hostSocketId: string, userName: string): { room: Room
     queue: [],
     messages: [],
     createdAt: Date.now(),
+    voiceUsers: new Set(),
   };
 
   rooms.set(roomId, room);

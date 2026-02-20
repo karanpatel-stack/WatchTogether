@@ -10,13 +10,16 @@ import VideoUrlInput from '../components/VideoUrlInput'
 import QueuePanel from '../components/QueuePanel'
 import CommentsPanel from '../components/CommentsPanel'
 import SettingsPanel from '../components/SettingsPanel'
+import VoiceControls from '../components/VoiceControls'
+import { VoiceProvider, useVoice } from '../lib/VoiceContext'
 import { MessageSquare, Users, X, ListMusic, MessageCircle, Settings } from 'lucide-react'
 
 type SidebarTab = 'chat' | 'people' | 'queue' | 'comments' | 'settings'
 
-export default function Room() {
+function RoomContent() {
   const { roomId } = useParams<{ roomId: string }>()
   const navigate = useNavigate()
+  const { joinVoice, leaveVoice } = useVoice()
 
   const [users, setUsers] = useState<User[]>([])
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -50,6 +53,15 @@ export default function Room() {
     setConnected(true)
     connectedRef.current = true
   }, [])
+
+  // Auto-join voice when connected to room (muted by default)
+  const voiceJoinedRef = useRef(false)
+  useEffect(() => {
+    if (connected && !voiceJoinedRef.current) {
+      voiceJoinedRef.current = true
+      joinVoice()
+    }
+  }, [connected, joinVoice])
 
   useEffect(() => {
     const storedName = localStorage.getItem('wp_username')
@@ -166,6 +178,7 @@ export default function Room() {
   }, [roomId, navigate, handleRoomState])
 
   const handleLeave = () => {
+    leaveVoice()
     socket.emit('room:leave')
     socket.disconnect()
     navigate('/')
@@ -189,6 +202,14 @@ export default function Room() {
 
   const handleQueueReorder = (itemId: string, newIndex: number) => {
     socket.emit('queue:reorder', { itemId, newIndex })
+  }
+
+  const handleQueuePlay = (itemId: string) => {
+    socket.emit('queue:play', { itemId })
+  }
+
+  const handleQueuePlayNext = () => {
+    socket.emit('queue:play-next')
   }
 
   const handleVideoEnded = () => {
@@ -278,7 +299,7 @@ export default function Room() {
       case 'people':
         return <UserList users={users} hostId={hostId} currentUserId={socket.id || ''} />
       case 'queue':
-        return <QueuePanel queue={queue} onRemove={handleQueueRemove} onReorder={handleQueueReorder} />
+        return <QueuePanel queue={queue} onRemove={handleQueueRemove} onReorder={handleQueueReorder} onPlay={handleQueuePlay} onPlayNext={handleQueuePlayNext} />
       case 'comments':
         return <CommentsPanel videoId={videoState.videoId} />
       case 'settings':
@@ -340,6 +361,8 @@ export default function Room() {
                 </p>
               </div>
             )}
+            {/* Voice Controls Overlay */}
+            <VoiceControls />
           </div>
         </div>
 
@@ -385,5 +408,13 @@ export default function Room() {
         {mobileTabButton('settings', 'Settings', <Settings className="w-4 h-4" />)}
       </div>
     </div>
+  )
+}
+
+export default function Room() {
+  return (
+    <VoiceProvider>
+      <RoomContent />
+    </VoiceProvider>
   )
 }
