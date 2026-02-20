@@ -1,7 +1,6 @@
 # WatchParty - Self-hosted YouTube Watch Party
 # Deploy via Dockge on TrueNAS
-# Reverse proxy with Nginx Proxy Manager (NPM Plus) + Let's Encrypt
-# DNS managed by Cloudflare
+# Cloudflare Tunnel for secure access (no port forwarding needed)
 
 services:
   server:
@@ -27,11 +26,21 @@ services:
     build: ./frontend
     container_name: watchparty-frontend
     restart: unless-stopped
-    ports:
-      - "${APP_PORT:-8080}:80"
     depends_on:
       server:
         condition: service_healthy
+    networks:
+      - watchparty
+
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    container_name: watchparty-tunnel
+    restart: unless-stopped
+    command: tunnel run
+    environment:
+      - TUNNEL_TOKEN=${TUNNEL_TOKEN}
+    depends_on:
+      - frontend
     networks:
       - watchparty
 
