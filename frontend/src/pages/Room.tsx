@@ -6,6 +6,7 @@ import VideoPlayer from '../components/VideoPlayer'
 import DirectVideoPlayer from '../components/DirectVideoPlayer'
 import ScreenSharePlayer from '../components/ScreenSharePlayer'
 import ScreenShareControls from '../components/ScreenShareControls'
+import LivingRoomView from '../components/LivingRoomView'
 import Chat from '../components/Chat'
 import UserList from '../components/UserList'
 import RoomHeader from '../components/RoomHeader'
@@ -52,6 +53,8 @@ function RoomContent() {
   const [activeTab, setActiveTab] = useState<SidebarTab>('chat')
   const [mobileTab, setMobileTab] = useState<SidebarTab | null>(null)
   const [unreadCount, setUnreadCount] = useState(0)
+  const [livingRoomMode, setLivingRoomMode] = useState(false)
+  const [theatreUrlInput, setTheatreUrlInput] = useState(false)
   const [queue, setQueue] = useState<QueueItem[]>([])
 
   const myUserId = useRef(localStorage.getItem('wp_userId') || '')
@@ -204,6 +207,7 @@ function RoomContent() {
 
   const handleLoadVideo = (url: string) => {
     socket.emit('video:load', { url })
+    setTheatreUrlInput(false)
   }
 
   const handleAddToQueue = (url: string) => {
@@ -357,65 +361,94 @@ function RoomContent() {
         isHost={isHost}
         userCount={users.length}
         onLeave={handleLeave}
+        livingRoomMode={livingRoomMode}
+        onToggleLivingRoom={() => setLivingRoomMode((m) => !m)}
       />
 
       <div className="flex-1 flex min-h-0">
         {/* Main Content */}
         <div className="flex-1 flex flex-col min-w-0">
           {/* Video URL Input */}
-          <VideoUrlInput onLoadVideo={handleLoadVideo} onAddToQueue={handleAddToQueue} />
+          {!livingRoomMode && <VideoUrlInput onLoadVideo={handleLoadVideo} onAddToQueue={handleAddToQueue} />}
 
           {/* Video Player */}
           <div className="flex-1 relative bg-black/40">
-            {/* Priority: Screen Share > Direct Video > YouTube > Empty */}
-            {isViewing && remoteStream ? (
-              <ScreenSharePlayer stream={remoteStream} />
-            ) : isSharing ? (
-              <div className="absolute inset-0 flex flex-col items-center justify-center text-white/20 bg-black/60">
-                <svg className="w-16 h-16 mb-4 opacity-40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <rect x="2" y="3" width="20" height="14" rx="2" /><line x1="8" y1="21" x2="16" y2="21" /><line x1="12" y1="17" x2="12" y2="21" />
-                </svg>
-                <p className="text-lg font-medium text-white/40">You are sharing your screen</p>
-                <p className="text-sm mt-1 text-white/20">Others can see your screen content</p>
-              </div>
-            ) : videoState.videoType === 'direct' && videoState.videoUrl ? (
-              <DirectVideoPlayer
-                videoState={videoState}
-                onPlay={handlePlay}
-                onPause={handlePause}
-                onSeek={handleSeek}
-                onEnd={handleVideoEnded}
-              />
-            ) : videoState.videoId ? (
-              <VideoPlayer
-                videoState={videoState}
-                onPlay={handlePlay}
-                onPause={handlePause}
-                onSeek={handleSeek}
-                onEnd={handleVideoEnded}
-              />
-            ) : (
-              <div className="absolute inset-0 flex flex-col items-center justify-center text-white/20">
-                <svg className="w-20 h-20 mb-4 opacity-30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1">
-                  <path d="M23 7l-7 5 7 5V7z" /><rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
-                </svg>
-                <p className="text-lg font-medium">No video loaded</p>
-                <p className="text-sm mt-1 text-white/10">
-                  Paste a YouTube URL or direct video link above, or share your screen
-                </p>
-              </div>
-            )}
-            {/* Screen share local preview */}
-            {isSharing && (
-              <div className="absolute bottom-14 left-3 z-20 w-48 aspect-video rounded-xl overflow-hidden border border-white/10 shadow-[0_4px_24px_rgba(0,0,0,0.5)] bg-black">
-                <video
-                  ref={localPreviewRef}
-                  autoPlay
-                  muted
-                  playsInline
-                  className="w-full h-full object-contain"
+            {livingRoomMode ? (
+              <>
+                <LivingRoomView
+                  users={users}
+                  videoState={videoState}
+                  isSharing={isSharing}
+                  isViewing={isViewing}
+                  localStream={localStream}
+                  remoteStream={remoteStream}
+                  onPlay={handlePlay}
+                  onPause={handlePause}
+                  onSeek={handleSeek}
+                  onEnd={handleVideoEnded}
+                  onToggleUrlInput={() => setTheatreUrlInput((v) => !v)}
+                  urlInputOpen={theatreUrlInput}
                 />
-              </div>
+                {/* Floating URL input overlay in Theatre mode */}
+                {theatreUrlInput && (
+                  <div className="absolute top-0 left-0 right-0 z-30">
+                    <VideoUrlInput onLoadVideo={handleLoadVideo} onAddToQueue={handleAddToQueue} />
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                {/* Priority: Screen Share > Direct Video > YouTube > Empty */}
+                {isViewing && remoteStream ? (
+                  <ScreenSharePlayer stream={remoteStream} />
+                ) : isSharing ? (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center text-white/20 bg-black/60">
+                    <svg className="w-16 h-16 mb-4 opacity-40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <rect x="2" y="3" width="20" height="14" rx="2" /><line x1="8" y1="21" x2="16" y2="21" /><line x1="12" y1="17" x2="12" y2="21" />
+                    </svg>
+                    <p className="text-lg font-medium text-white/40">You are sharing your screen</p>
+                    <p className="text-sm mt-1 text-white/20">Others can see your screen content</p>
+                  </div>
+                ) : videoState.videoType === 'direct' && videoState.videoUrl ? (
+                  <DirectVideoPlayer
+                    videoState={videoState}
+                    onPlay={handlePlay}
+                    onPause={handlePause}
+                    onSeek={handleSeek}
+                    onEnd={handleVideoEnded}
+                  />
+                ) : videoState.videoId ? (
+                  <VideoPlayer
+                    videoState={videoState}
+                    onPlay={handlePlay}
+                    onPause={handlePause}
+                    onSeek={handleSeek}
+                    onEnd={handleVideoEnded}
+                  />
+                ) : (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center text-white/20">
+                    <svg className="w-20 h-20 mb-4 opacity-30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1">
+                      <path d="M23 7l-7 5 7 5V7z" /><rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+                    </svg>
+                    <p className="text-lg font-medium">No video loaded</p>
+                    <p className="text-sm mt-1 text-white/10">
+                      Paste a YouTube URL or direct video link above, or share your screen
+                    </p>
+                  </div>
+                )}
+                {/* Screen share local preview */}
+                {isSharing && (
+                  <div className="absolute bottom-14 left-3 z-20 w-48 aspect-video rounded-xl overflow-hidden border border-white/10 shadow-[0_4px_24px_rgba(0,0,0,0.5)] bg-black">
+                    <video
+                      ref={localPreviewRef}
+                      autoPlay
+                      muted
+                      playsInline
+                      className="w-full h-full object-contain"
+                    />
+                  </div>
+                )}
+              </>
             )}
             {/* Voice Controls Overlay */}
             <VoiceControls />
@@ -425,7 +458,7 @@ function RoomContent() {
         </div>
 
         {/* Sidebar */}
-        <div className="hidden lg:flex flex-col w-[380px] min-h-0 border-l border-panel bg-panel backdrop-blur-xl shadow-[-4px_0_30px_rgba(0,0,0,0.3)]">
+        <div className={`${livingRoomMode ? 'hidden' : 'hidden lg:flex'} flex-col w-[380px] min-h-0 border-l border-panel bg-panel backdrop-blur-xl shadow-[-4px_0_30px_rgba(0,0,0,0.3)]`}>
           {/* Sidebar Tabs */}
           <div className="flex border-b border-panel">
             {tabButton('chat', 'Chat', <MessageSquare className="w-3.5 h-3.5" />, unreadCount)}

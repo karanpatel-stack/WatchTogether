@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Tv, Copy, Check, LogOut, Crown, Users, Mic, MicOff } from 'lucide-react'
+import { Tv, Copy, Check, LogOut, Crown, Users, Mic, MicOff, Film } from 'lucide-react'
 import { useVoice } from '../lib/VoiceContext'
 
 interface Props {
@@ -7,9 +7,11 @@ interface Props {
   isHost: boolean
   userCount: number
   onLeave: () => void
+  livingRoomMode: boolean
+  onToggleLivingRoom: () => void
 }
 
-export default function RoomHeader({ roomId, isHost, userCount, onLeave }: Props) {
+export default function RoomHeader({ roomId, isHost, userCount, onLeave, livingRoomMode, onToggleLivingRoom }: Props) {
   const [copied, setCopied] = useState(false)
   const { isMuted, isInVoice, toggleMute, voiceSettings } = useVoice()
 
@@ -54,6 +56,19 @@ export default function RoomHeader({ roomId, isHost, userCount, onLeave }: Props
       </div>
 
       <div className="flex items-center gap-3">
+        <button
+          onClick={onToggleLivingRoom}
+          title={livingRoomMode ? 'Exit Theatre mode' : 'Theatre mode'}
+          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all text-xs font-medium ${
+            livingRoomMode
+              ? 'bg-accent-500/20 border-accent-500/30 text-[var(--accent-text)]'
+              : 'bg-white/[0.04] border-white/[0.06] text-white/40 hover:bg-white/[0.06] hover:border-white/[0.1] hover:text-white/60'
+          }`}
+        >
+          <Film className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">Theatre</span>
+        </button>
+
         <div className="hidden sm:flex items-center gap-1.5 text-white/30">
           <Users className="w-3.5 h-3.5" />
           <span className="text-xs font-medium">{userCount}</span>
