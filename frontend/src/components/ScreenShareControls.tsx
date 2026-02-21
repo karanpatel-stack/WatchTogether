@@ -1,11 +1,11 @@
 import { Monitor, MonitorOff, AlertCircle } from 'lucide-react'
 import { useScreenShare } from '../lib/ScreenShareContext'
 
-export default function ScreenShareControls() {
+export default function ScreenShareControls({ rightOffset = 0 }: { rightOffset?: number }) {
   const { isSharing, isViewing, screenError, startSharing, stopSharing } = useScreenShare()
 
   return (
-    <div className="absolute bottom-3 right-3 z-10 flex flex-col items-end gap-2">
+    <div className="absolute bottom-3 z-10 flex flex-col items-end gap-2" style={{ right: 12 + rightOffset, transition: 'right 0.3s ease' }}>
       {/* Error message */}
       {screenError && !isSharing && (
         <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-red-500/20 border border-red-500/30 backdrop-blur-xl">

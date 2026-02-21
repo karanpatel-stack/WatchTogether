@@ -62,9 +62,36 @@ function RoomContent() {
   const myUserId = useRef(localStorage.getItem('wp_userId') || '')
   const connectedRef = useRef(false)
   const joinedRef = useRef(false)
+  const theatreUrlRef = useRef<HTMLDivElement>(null)
+  const lobbyPanelRef = useRef<HTMLDivElement>(null)
   const isHost = hostId === socket.id
 
   useAmbientColors(videoState.videoId)
+
+  // Click-outside dismiss for Theatre overlays, but not when clicking gear controls
+  useEffect(() => {
+    if (!theatreUrlInput) return
+    const handler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement
+      if (theatreUrlRef.current?.contains(target)) return
+      if (target.closest('[data-theatre-control]')) return
+      setTheatreUrlInput(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [theatreUrlInput])
+
+  useEffect(() => {
+    if (!lobbyOpen) return
+    const handler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement
+      if (lobbyPanelRef.current?.contains(target)) return
+      if (target.closest('[data-theatre-control]')) return
+      setLobbyOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [lobbyOpen])
 
   const handleRoomState = useCallback((state: RoomState) => {
     setUsers(state.users)
@@ -407,25 +434,18 @@ function RoomContent() {
                   onSeek={handleSeek}
                   onEnd={handleVideoEnded}
                   onToggleUrlInput={() => setTheatreUrlInput((v) => !v)}
-                  urlInputOpen={theatreUrlInput}
-                  lobbyOpen={lobbyOpen}
                   onToggleLobby={() => setLobbyOpen((v) => !v)}
                   dimLevel={dimLevel}
                 />
                 {/* Floating URL input overlay in Theatre mode */}
                 {theatreUrlInput && (
-                  <>
-                    <div className="absolute inset-0 z-[29]" onMouseDown={() => setTheatreUrlInput(false)} />
-                    <div className="absolute top-0 left-0 right-0 z-30">
-                      <VideoUrlInput onLoadVideo={handleLoadVideo} onAddToQueue={handleAddToQueue} />
-                    </div>
-                  </>
+                  <div ref={theatreUrlRef} className="absolute top-0 left-0 z-30" style={{ right: lobbyOpen ? 320 : 0, transition: 'right 0.3s ease' }}>
+                    <VideoUrlInput onLoadVideo={handleLoadVideo} onAddToQueue={handleAddToQueue} />
+                  </div>
                 )}
                 {/* Lobby panel overlay in Theatre mode */}
                 {lobbyOpen && (
-                  <>
-                  <div className="absolute inset-0 z-[19]" onMouseDown={() => setLobbyOpen(false)} />
-                  <div className="absolute right-0 top-0 bottom-0 z-20 w-80 flex flex-col bg-panel backdrop-blur-xl border-l border-panel shadow-[-4px_0_30px_rgba(0,0,0,0.4)]">
+                  <div ref={lobbyPanelRef} className="absolute right-0 top-0 bottom-0 z-20 w-80 flex flex-col bg-panel backdrop-blur-xl border-l border-panel shadow-[-4px_0_30px_rgba(0,0,0,0.4)]">
                     <div className="flex border-b border-panel">
                       {lobbyTabButton('chat', 'Chat', <MessageSquare className="w-4 h-4" />, unreadCount)}
                       {lobbyTabButton('people', 'People', <Users className="w-4 h-4" />)}
@@ -462,7 +482,6 @@ function RoomContent() {
                       renderTabContent()
                     )}
                   </div>
-                  </>
                 )}
               </>
             ) : (
@@ -522,7 +541,7 @@ function RoomContent() {
             {/* Voice Controls Overlay */}
             <VoiceControls />
             {/* Screen Share Controls */}
-            <ScreenShareControls />
+            <ScreenShareControls rightOffset={livingRoomMode && lobbyOpen ? 320 : 0} />
           </div>
         </div>
 

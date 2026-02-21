@@ -1,5 +1,5 @@
-import { useRef, useEffect } from 'react'
-import { Link, Users } from 'lucide-react'
+import { useRef, useEffect, useState } from 'react'
+import { Link, Users, Settings } from 'lucide-react'
 import type { User, VideoState } from '../lib/types'
 import VideoPlayer from './VideoPlayer'
 import DirectVideoPlayer from './DirectVideoPlayer'
@@ -33,8 +33,6 @@ interface Props {
   onSeek: (t: number) => void
   onEnd: () => void
   onToggleUrlInput: () => void
-  urlInputOpen: boolean
-  lobbyOpen: boolean
   onToggleLobby: () => void
   dimLevel: number
 }
@@ -78,15 +76,29 @@ function Avatar({ user, color }: { user: User | null; color: string }) {
 
 export default function LivingRoomView({
   users, videoState, isSharing, isViewing, localStream, remoteStream,
-  onPlay, onPause, onSeek, onEnd, onToggleUrlInput, urlInputOpen, lobbyOpen, onToggleLobby, dimLevel,
+  onPlay, onPause, onSeek, onEnd, onToggleUrlInput, onToggleLobby, dimLevel,
 }: Props) {
   const previewRef = useRef<HTMLVideoElement>(null)
+  const [gearOpen, setGearOpen] = useState(false)
+  const gearRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const v = previewRef.current
     if (!v) return
     v.srcObject = isSharing && localStream ? localStream : null
   }, [isSharing, localStream])
+
+  // Close gear menu on click outside
+  useEffect(() => {
+    if (!gearOpen) return
+    const handler = (e: MouseEvent) => {
+      if (gearRef.current && !gearRef.current.contains(e.target as Node)) {
+        setGearOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [gearOpen])
 
   // Assign users to seats 0-7 left to right
   const s = Array.from({ length: 8 }, (_, i) => users[i] ?? null)
@@ -335,43 +347,80 @@ export default function LivingRoomView({
           borderRadius: '6px 6px 0 0',
           boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
         }} />
-        {/* Buttons row */}
-        <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
-          {/* Change Video button */}
-          <button
-            onClick={onToggleUrlInput}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 6,
-              padding: '5px 12px',
-              borderRadius: 8,
-              border: urlInputOpen ? '1px solid rgba(var(--accent-rgb,99,102,241),0.4)' : '1px solid rgba(255,255,255,0.08)',
-              background: urlInputOpen ? 'rgba(var(--accent-rgb,99,102,241),0.15)' : 'rgba(255,255,255,0.05)',
-              color: urlInputOpen ? 'rgba(255,255,255,0.8)' : 'rgba(255,255,255,0.35)',
-              fontSize: 11, fontWeight: 600, cursor: 'pointer',
-              transition: 'all 0.2s',
-            }}
-          >
-            <Link size={12} />
-            Change Video
-          </button>
-          {/* Lobby button */}
-          <button
-            onClick={onToggleLobby}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 6,
-              padding: '5px 12px',
-              borderRadius: 8,
-              border: lobbyOpen ? '1px solid rgba(var(--accent-rgb,99,102,241),0.4)' : '1px solid rgba(255,255,255,0.08)',
-              background: lobbyOpen ? 'rgba(var(--accent-rgb,99,102,241),0.15)' : 'rgba(255,255,255,0.05)',
-              color: lobbyOpen ? 'rgba(255,255,255,0.8)' : 'rgba(255,255,255,0.35)',
-              fontSize: 11, fontWeight: 600, cursor: 'pointer',
-              transition: 'all 0.2s',
-            }}
-          >
-            <Users size={12} />
-            Lobby
-          </button>
-        </div>
+      </div>
+
+      {/* === GEAR MENU — center front of couch === */}
+      <div ref={gearRef} data-theatre-control style={{
+        position: 'absolute', left: '50%', transform: 'translateX(-50%)',
+        bottom: `calc(3% + ${COUCH_H}px + 6px)`, zIndex: 12,
+        display: 'flex', flexDirection: 'column', alignItems: 'center',
+      }}>
+        {/* Popup menu */}
+        {gearOpen && (
+          <div style={{
+            position: 'absolute', bottom: '100%', marginBottom: 6,
+            display: 'flex', flexDirection: 'column', gap: 4,
+            padding: 6, borderRadius: 10,
+            background: 'rgba(20,10,5,0.92)',
+            border: '1px solid rgba(255,255,255,0.1)',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.7)',
+            backdropFilter: 'blur(12px)',
+            whiteSpace: 'nowrap',
+          }}>
+            <button
+              onClick={() => { onToggleUrlInput(); setGearOpen(false) }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '6px 14px',
+                borderRadius: 6,
+                border: '1px solid rgba(255,255,255,0.08)',
+                background: 'rgba(255,255,255,0.05)',
+                color: 'rgba(255,255,255,0.7)',
+                fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                transition: 'all 0.15s',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(var(--accent-rgb,99,102,241),0.15)'; e.currentTarget.style.borderColor = 'rgba(var(--accent-rgb,99,102,241),0.4)'; e.currentTarget.style.color = 'rgba(255,255,255,0.9)' }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'; e.currentTarget.style.color = 'rgba(255,255,255,0.7)' }}
+            >
+              <Link size={12} />
+              Change Video
+            </button>
+            <button
+              onClick={() => { onToggleLobby(); setGearOpen(false) }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '6px 14px',
+                borderRadius: 6,
+                border: '1px solid rgba(255,255,255,0.08)',
+                background: 'rgba(255,255,255,0.05)',
+                color: 'rgba(255,255,255,0.7)',
+                fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                transition: 'all 0.15s',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(var(--accent-rgb,99,102,241),0.15)'; e.currentTarget.style.borderColor = 'rgba(var(--accent-rgb,99,102,241),0.4)'; e.currentTarget.style.color = 'rgba(255,255,255,0.9)' }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'; e.currentTarget.style.color = 'rgba(255,255,255,0.7)' }}
+            >
+              <Users size={12} />
+              Lobby
+            </button>
+          </div>
+        )}
+        {/* Gear button */}
+        <button
+          onClick={() => setGearOpen(v => !v)}
+          style={{
+            width: 32, height: 32, borderRadius: '50%',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            border: gearOpen ? '1px solid rgba(var(--accent-rgb,99,102,241),0.5)' : '1px solid rgba(255,255,255,0.1)',
+            background: gearOpen ? 'rgba(var(--accent-rgb,99,102,241),0.2)' : 'rgba(255,255,255,0.06)',
+            color: gearOpen ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.3)',
+            cursor: 'pointer',
+            transition: 'all 0.2s',
+            boxShadow: '0 2px 10px rgba(0,0,0,0.4)',
+          }}
+        >
+          <Settings size={15} style={{ transition: 'transform 0.3s', transform: gearOpen ? 'rotate(90deg)' : 'rotate(0deg)' }} />
+        </button>
       </div>
 
       {/* === STRAIGHT COUCH — 8 seats in one row === */}
