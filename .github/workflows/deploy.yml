@@ -1,0 +1,24 @@
+name: Deploy
+
+on:
+  push:
+    branches: [master]
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+    steps:
+      - name: Pull latest code
+        run: |
+          cd /opt/watchparty
+          git pull
+
+      - name: Rebuild and redeploy containers
+        run: |
+          cd /opt/watchparty
+          docker compose up -d --build
+
+      - name: Verify deployment
+        run: |
+          sleep 10
+          docker compose -f /opt/watchparty/docker-compose.yml ps
