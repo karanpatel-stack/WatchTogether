@@ -13,6 +13,7 @@ import {
   addMessage,
   deleteMessage,
   extractVideoId,
+  detectVideoType,
   getRoomCount,
   getTotalUsers,
 } from './rooms.js';
@@ -165,6 +166,7 @@ io.on('connection', (socket) => {
       videoState: getVideoState(room),
       messages: room.messages,
       queue: room.queue,
+      screenSharerId: room.screenSharerId,
     });
   });
 
@@ -188,9 +190,15 @@ io.on('connection', (socket) => {
       videoState: getVideoState(room),
       messages: room.messages,
       queue: room.queue,
+      screenSharerId: room.screenSharerId,
     });
 
     socket.to(room.id).emit('room:user-joined', { user });
+
+    // If screen share is active, notify the sharer about the new viewer
+    if (room.screenSharerId && room.screenSharerId !== socket.id) {
+      io.to(room.screenSharerId).emit('screen:viewer-joined', { viewerId: socket.id });
+    }
     const systemMsg = room.messages[room.messages.length - 1];
     if (systemMsg) {
       io.to(room.id).emit('chat:message', systemMsg);
@@ -205,22 +213,31 @@ io.on('connection', (socket) => {
     const room = getUserRoom(socket.id);
     if (!room) return;
 
-    const videoId = extractVideoId(data.url);
-    if (!videoId) {
-      socket.emit('error', { message: 'Invalid YouTube URL' });
+    const videoType = detectVideoType(data.url);
+    if (!videoType) {
+      socket.emit('error', { message: 'Invalid URL. Paste a YouTube link or a direct video URL (.mp4, .webm, .m3u8, etc.)' });
       return;
     }
 
     const user = room.users.get(socket.id);
     const userName = user?.name || 'Someone';
 
-    room.videoId = videoId;
-    room.videoUrl = data.url;
+    if (videoType === 'youtube') {
+      const videoId = extractVideoId(data.url)!;
+      room.videoId = videoId;
+      room.videoUrl = data.url;
+      room.videoType = 'youtube';
+    } else {
+      room.videoId = '';
+      room.videoUrl = data.url;
+      room.videoType = 'direct';
+    }
+
     room.isPlaying = false;
     room.currentTime = 0;
     room.lastSyncTime = Date.now();
 
-    io.to(room.id).emit('video:load', { videoId, videoUrl: data.url });
+    io.to(room.id).emit('video:load', { videoId: room.videoId, videoUrl: room.videoUrl });
     room.seq++;
     io.to(room.id).emit('video:state-update', getVideoState(room));
 
@@ -292,6 +309,7 @@ io.on('connection', (socket) => {
 
     room.videoId = next.videoId;
     room.videoUrl = next.videoUrl;
+    room.videoType = next.videoId ? 'youtube' : 'direct';
     room.isPlaying = false;
     room.currentTime = 0;
     room.lastSyncTime = Date.now();
@@ -327,18 +345,19 @@ io.on('connection', (socket) => {
       return;
     }
 
-    const videoId = extractVideoId(data.url);
-    if (!videoId) {
-      callback({ success: false, error: 'Invalid YouTube URL' });
+    const videoType = detectVideoType(data.url);
+    if (!videoType) {
+      callback({ success: false, error: 'Invalid URL. Paste a YouTube link or a direct video URL.' });
       return;
     }
 
+    const videoId = videoType === 'youtube' ? extractVideoId(data.url)! : '';
     const user = room.users.get(socket.id);
     const item: QueueItem = {
       id: nanoid(),
       videoId,
       videoUrl: data.url,
-      title: videoId, // Temporary, will be updated async
+      title: videoType === 'youtube' ? videoId : data.url.split('/').pop()?.split('?')[0] || 'Direct Video',
       addedBy: user?.name || 'Someone',
       addedAt: Date.now(),
     };
@@ -348,11 +367,13 @@ io.on('connection', (socket) => {
 
     io.to(room.id).emit('queue:update', { queue: room.queue });
 
-    // Fetch real title asynchronously and update
-    fetchVideoTitle(videoId).then((title) => {
-      item.title = title;
-      io.to(room.id).emit('queue:update', { queue: room.queue });
-    });
+    // Fetch real title asynchronously for YouTube videos
+    if (videoType === 'youtube') {
+      fetchVideoTitle(videoId).then((title) => {
+        item.title = title;
+        io.to(room.id).emit('queue:update', { queue: room.queue });
+      });
+    }
 
     const systemMsg = addMessage(room, 'system', '');
     if (systemMsg) {
@@ -401,6 +422,7 @@ io.on('connection', (socket) => {
 
     room.videoId = item.videoId;
     room.videoUrl = item.videoUrl;
+    room.videoType = item.videoId ? 'youtube' : 'direct';
     room.isPlaying = false;
     room.currentTime = 0;
     room.lastSyncTime = Date.now();
@@ -430,6 +452,7 @@ io.on('connection', (socket) => {
 
     room.videoId = next.videoId;
     room.videoUrl = next.videoUrl;
+    room.videoType = next.videoId ? 'youtube' : 'direct';
     room.isPlaying = false;
     room.currentTime = 0;
     room.lastSyncTime = Date.now();
@@ -499,12 +522,64 @@ io.on('connection', (socket) => {
     io.to(data.to).emit('voice:ice-candidate', { from: socket.id, candidate: data.candidate });
   });
 
+  // --- Screen share signaling ---
+  socket.on('screen:start', () => {
+    const room = getUserRoom(socket.id);
+    if (!room) return;
+
+    // Only one sharer at a time
+    if (room.screenSharerId) {
+      socket.emit('error', { message: 'Someone is already sharing their screen' });
+      return;
+    }
+
+    room.screenSharerId = socket.id;
+    socket.to(room.id).emit('screen:started', { sharerId: socket.id });
+
+    // Notify the sharer about each existing user so they can create peer connections
+    for (const [userId] of room.users) {
+      if (userId !== socket.id) {
+        socket.emit('screen:viewer-joined', { viewerId: userId });
+      }
+    }
+  });
+
+  socket.on('screen:stop', () => {
+    const room = getUserRoom(socket.id);
+    if (!room) return;
+
+    if (room.screenSharerId === socket.id) {
+      room.screenSharerId = null;
+      socket.to(room.id).emit('screen:stopped');
+    }
+  });
+
+  socket.on('screen:offer', (data) => {
+    io.to(data.to).emit('screen:offer', { from: socket.id, offer: data.offer });
+  });
+
+  socket.on('screen:answer', (data) => {
+    io.to(data.to).emit('screen:answer', { from: socket.id, answer: data.answer });
+  });
+
+  socket.on('screen:ice-candidate', (data) => {
+    io.to(data.to).emit('screen:ice-candidate', { from: socket.id, candidate: data.candidate });
+  });
+
   function handleDisconnect() {
     // Clean up voice before leaving room
     const roomBeforeLeave = getUserRoom(socket.id);
-    if (roomBeforeLeave && roomBeforeLeave.voiceUsers.has(socket.id)) {
-      roomBeforeLeave.voiceUsers.delete(socket.id);
-      socket.to(roomBeforeLeave.id).emit('voice:user-left', { userId: socket.id });
+    if (roomBeforeLeave) {
+      if (roomBeforeLeave.voiceUsers.has(socket.id)) {
+        roomBeforeLeave.voiceUsers.delete(socket.id);
+        socket.to(roomBeforeLeave.id).emit('voice:user-left', { userId: socket.id });
+      }
+
+      // Clean up screen share if this user was sharing
+      if (roomBeforeLeave.screenSharerId === socket.id) {
+        roomBeforeLeave.screenSharerId = null;
+        socket.to(roomBeforeLeave.id).emit('screen:stopped');
+      }
     }
 
     const result = leaveRoom(socket.id);

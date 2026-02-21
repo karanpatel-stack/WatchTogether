@@ -20,6 +20,7 @@ export interface Room {
   users: Map<string, User>;
   videoUrl: string;
   videoId: string;
+  videoType: 'youtube' | 'direct';
   isPlaying: boolean;
   currentTime: number;
   lastSyncTime: number;
@@ -29,6 +30,7 @@ export interface Room {
   messages: ChatMessage[];
   createdAt: number;
   voiceUsers: Set<string>;
+  screenSharerId: string | null;
 }
 
 export interface ChatMessage {
@@ -44,6 +46,7 @@ export interface ChatMessage {
 export interface VideoState {
   videoId: string;
   videoUrl: string;
+  videoType: 'youtube' | 'direct';
   isPlaying: boolean;
   currentTime: number;
   playbackRate: number;
@@ -73,6 +76,11 @@ export interface ClientToServerEvents {
   'voice:offer': (data: { to: string; offer: RTCSessionDescriptionInit }) => void;
   'voice:answer': (data: { to: string; answer: RTCSessionDescriptionInit }) => void;
   'voice:ice-candidate': (data: { to: string; candidate: RTCIceCandidateInit }) => void;
+  'screen:start': () => void;
+  'screen:stop': () => void;
+  'screen:offer': (data: { to: string; offer: RTCSessionDescriptionInit }) => void;
+  'screen:answer': (data: { to: string; answer: RTCSessionDescriptionInit }) => void;
+  'screen:ice-candidate': (data: { to: string; candidate: RTCIceCandidateInit }) => void;
 }
 
 export interface ServerToClientEvents {
@@ -83,6 +91,7 @@ export interface ServerToClientEvents {
     videoState: VideoState;
     messages: ChatMessage[];
     queue: QueueItem[];
+    screenSharerId: string | null;
   }) => void;
   'room:user-joined': (data: { user: User }) => void;
   'room:user-left': (data: { userId: string; userName: string }) => void;
@@ -98,5 +107,11 @@ export interface ServerToClientEvents {
   'voice:answer': (data: { from: string; answer: RTCSessionDescriptionInit }) => void;
   'voice:ice-candidate': (data: { from: string; candidate: RTCIceCandidateInit }) => void;
   'voice:active-users': (data: { userIds: string[] }) => void;
+  'screen:started': (data: { sharerId: string }) => void;
+  'screen:stopped': () => void;
+  'screen:offer': (data: { from: string; offer: RTCSessionDescriptionInit }) => void;
+  'screen:answer': (data: { from: string; answer: RTCSessionDescriptionInit }) => void;
+  'screen:ice-candidate': (data: { from: string; candidate: RTCIceCandidateInit }) => void;
+  'screen:viewer-joined': (data: { viewerId: string }) => void;
   'error': (data: { message: string }) => void;
 }

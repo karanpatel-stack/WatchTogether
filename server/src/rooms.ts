@@ -40,6 +40,7 @@ export function createRoom(hostSocketId: string, userName: string): { room: Room
     users: new Map([[hostSocketId, user]]),
     videoUrl: '',
     videoId: '',
+    videoType: 'youtube',
     isPlaying: false,
     currentTime: 0,
     lastSyncTime: Date.now(),
@@ -49,6 +50,7 @@ export function createRoom(hostSocketId: string, userName: string): { room: Room
     messages: [],
     createdAt: Date.now(),
     voiceUsers: new Set(),
+    screenSharerId: null,
   };
 
   rooms.set(roomId, room);
@@ -138,12 +140,28 @@ export function getVideoState(room: Room): VideoState {
   return {
     videoId: room.videoId,
     videoUrl: room.videoUrl,
+    videoType: room.videoType,
     isPlaying: room.isPlaying,
     currentTime: room.currentTime,
     playbackRate: room.playbackRate,
     timestamp: room.lastSyncTime,
     seq: room.seq,
   };
+}
+
+export function detectVideoType(url: string): 'youtube' | 'direct' | null {
+  // Check YouTube first
+  if (extractVideoId(url)) return 'youtube';
+
+  // Check direct video URLs
+  const directExtensions = /\.(mp4|webm|m3u8|mpd|ogg|mov|mkv)(\?.*)?$/i;
+  if (directExtensions.test(url)) return 'direct';
+
+  // Check for video MIME type hints in URL
+  const videoMimeHints = /[?&](type|mime)=(video|application\/x-mpegURL|application\/dash\+xml)/i;
+  if (videoMimeHints.test(url)) return 'direct';
+
+  return null;
 }
 
 export function addMessage(room: Room, userId: string, text: string): ChatMessage | null {

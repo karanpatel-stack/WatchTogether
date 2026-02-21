@@ -40,7 +40,7 @@ export default function VideoUrlInput({ onLoadVideo, onAddToQueue }: Props) {
           type="text"
           value={url}
           onChange={(e) => setUrl(e.target.value)}
-          placeholder="Paste YouTube URL here..."
+          placeholder="Paste YouTube URL or direct video link (.mp4, .m3u8, etc.)..."
           className="flex-1 bg-transparent text-white text-sm placeholder-white/20 outline-none min-w-0"
         />
       </div>

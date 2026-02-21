@@ -18,6 +18,7 @@ export interface ChatMessage {
 export interface VideoState {
   videoId: string;
   videoUrl: string;
+  videoType: 'youtube' | 'direct';
   isPlaying: boolean;
   currentTime: number;
   playbackRate: number;
@@ -41,4 +42,5 @@ export interface RoomState {
   videoState: VideoState;
   messages: ChatMessage[];
   queue: QueueItem[];
+  screenSharerId: string | null;
 }

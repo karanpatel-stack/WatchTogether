@@ -3,6 +3,9 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { socket } from '../lib/socket'
 import type { User, ChatMessage, VideoState, RoomState, QueueItem } from '../lib/types'
 import VideoPlayer from '../components/VideoPlayer'
+import DirectVideoPlayer from '../components/DirectVideoPlayer'
+import ScreenSharePlayer from '../components/ScreenSharePlayer'
+import ScreenShareControls from '../components/ScreenShareControls'
 import Chat from '../components/Chat'
 import UserList from '../components/UserList'
 import RoomHeader from '../components/RoomHeader'
@@ -13,6 +16,7 @@ import SettingsPanel from '../components/SettingsPanel'
 import VoiceControls from '../components/VoiceControls'
 import AmbientBackground from '../components/AmbientBackground'
 import { VoiceProvider, useVoice } from '../lib/VoiceContext'
+import { ScreenShareProvider, useScreenShare } from '../lib/ScreenShareContext'
 import { useAmbientColors } from '../hooks/useAmbientColors'
 import { MessageSquare, Users, X, ListMusic, MessageCircle, Settings } from 'lucide-react'
 
@@ -22,12 +26,14 @@ function RoomContent() {
   const { roomId } = useParams<{ roomId: string }>()
   const navigate = useNavigate()
   const { leaveVoice } = useVoice()
+  const { isSharing, isViewing, remoteStream, stopSharing, setInitialState } = useScreenShare()
 
   const [users, setUsers] = useState<User[]>([])
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [videoState, setVideoState] = useState<VideoState>({
     videoId: '',
     videoUrl: '',
+    videoType: 'youtube',
     isPlaying: false,
     currentTime: 0,
     playbackRate: 1,
@@ -54,9 +60,10 @@ function RoomContent() {
     setVideoState(state.videoState)
     setMessages(state.messages)
     setQueue(state.queue)
+    setInitialState(state.screenSharerId)
     setConnected(true)
     connectedRef.current = true
-  }, [])
+  }, [setInitialState])
 
   // Voice auto-join removed: getUserMedia requires a user gesture (click) in most
   // browsers. The user clicks "Join Voice" in the VoiceControls overlay instead.
@@ -181,6 +188,7 @@ function RoomContent() {
   }, [roomId, navigate, handleRoomState])
 
   const handleLeave = () => {
+    stopSharing()
     leaveVoice()
     socket.emit('room:leave')
     socket.disconnect()
@@ -352,7 +360,26 @@ function RoomContent() {
 
           {/* Video Player */}
           <div className="flex-1 relative bg-black/40">
-            {videoState.videoId ? (
+            {/* Priority: Screen Share > Direct Video > YouTube > Empty */}
+            {isViewing && remoteStream ? (
+              <ScreenSharePlayer stream={remoteStream} />
+            ) : isSharing ? (
+              <div className="absolute inset-0 flex flex-col items-center justify-center text-white/20 bg-black/60">
+                <svg className="w-16 h-16 mb-4 opacity-40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <rect x="2" y="3" width="20" height="14" rx="2" /><line x1="8" y1="21" x2="16" y2="21" /><line x1="12" y1="17" x2="12" y2="21" />
+                </svg>
+                <p className="text-lg font-medium text-white/40">You are sharing your screen</p>
+                <p className="text-sm mt-1 text-white/20">Others can see your screen content</p>
+              </div>
+            ) : videoState.videoType === 'direct' && videoState.videoUrl ? (
+              <DirectVideoPlayer
+                videoState={videoState}
+                onPlay={handlePlay}
+                onPause={handlePause}
+                onSeek={handleSeek}
+                onEnd={handleVideoEnded}
+              />
+            ) : videoState.videoId ? (
               <VideoPlayer
                 videoState={videoState}
                 onPlay={handlePlay}
@@ -367,12 +394,14 @@ function RoomContent() {
                 </svg>
                 <p className="text-lg font-medium">No video loaded</p>
                 <p className="text-sm mt-1 text-white/10">
-                  Paste a YouTube URL above to get started
+                  Paste a YouTube URL or direct video link above, or share your screen
                 </p>
               </div>
             )}
             {/* Voice Controls Overlay */}
             <VoiceControls />
+            {/* Screen Share Controls */}
+            <ScreenShareControls />
           </div>
         </div>
 
@@ -424,7 +453,9 @@ function RoomContent() {
 export default function Room() {
   return (
     <VoiceProvider>
-      <RoomContent />
+      <ScreenShareProvider>
+        <RoomContent />
+      </ScreenShareProvider>
     </VoiceProvider>
   )
 }
