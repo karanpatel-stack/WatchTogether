@@ -170,7 +170,7 @@ export default function Home() {
         <p className="text-center text-[11px] text-white/15 mt-8 leading-relaxed">
           Paste a YouTube link and watch in perfect sync with friends.
           <br />
-          No sign-up required. Rooms expire when empty.
+          No Accounts Needed. Rooms expire when empty.
         </p>
       </div>
     </div>
