@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { Send, Smile, Image } from 'lucide-react'
+import { Send, Smile, Image, Trash2 } from 'lucide-react'
 import type { ChatMessage } from '../lib/types'
 import EmojiPicker from './EmojiPicker'
 import GifPicker from './GifPicker'
@@ -7,7 +7,32 @@ import GifPicker from './GifPicker'
 interface Props {
   messages: ChatMessage[]
   onSendMessage: (text: string) => void
+  onDeleteMessage: (messageId: string) => void
   currentUserId: string
+}
+
+const URL_REGEX = /https?:\/\/[^\s<>"{}|\\^`[\]]+/gi
+
+function renderMessageText(text: string) {
+  const parts = text.split(URL_REGEX)
+  const matches = [...text.matchAll(URL_REGEX)]
+  return parts.flatMap((part, i) => {
+    const nodes: React.ReactNode[] = [part]
+    if (matches[i]) {
+      nodes.push(
+        <a
+          key={i}
+          href={matches[i][0]}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-[var(--accent-text)] underline underline-offset-2 hover:opacity-80 break-all"
+        >
+          {matches[i][0]}
+        </a>
+      )
+    }
+    return nodes
+  })
 }
 
 function isGifUrl(text: string): boolean {
@@ -17,7 +42,7 @@ function isGifUrl(text: string): boolean {
   return false
 }
 
-export default function Chat({ messages, onSendMessage, currentUserId }: Props) {
+export default function Chat({ messages, onSendMessage, onDeleteMessage, currentUserId }: Props) {
   const [text, setText] = useState('')
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
   const [showGifPicker, setShowGifPicker] = useState(false)
@@ -93,9 +118,18 @@ export default function Chat({ messages, onSendMessage, currentUserId }: Props) 
                       loading="lazy"
                     />
                   ) : (
-                    <p className="text-sm text-white/80 break-words leading-relaxed">{msg.text}</p>
+                    <p className="text-sm text-white/80 break-words leading-relaxed">{renderMessageText(msg.text)}</p>
                   )}
                 </div>
+                {msg.userId === currentUserId && (
+                  <button
+                    onClick={() => onDeleteMessage(msg.id)}
+                    className="flex-shrink-0 self-start mt-1 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-white/[0.08] text-white/20 hover:text-red-400"
+                    title="Delete message"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </div>
             )}
           </div>

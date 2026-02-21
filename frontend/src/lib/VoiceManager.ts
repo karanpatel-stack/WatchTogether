@@ -1,6 +1,26 @@
 import SimplePeer from 'simple-peer'
 import type { Socket } from 'socket.io-client'
 
+function setHighQualityOpus(sdp: string): string {
+  // Find Opus payload type from rtpmap line
+  const opusMatch = sdp.match(/a=rtpmap:(\d+) opus\/48000\/2/)
+  if (!opusMatch) return sdp
+  const pt = opusMatch[1]
+
+  // Build high-quality fmtp: FEC on, DTX off, high bitrate, low packet time
+  const qualityFmtp = `a=fmtp:${pt} minptime=10;useinbandfec=1;maxaveragebitrate=510000;usedtx=0\r\n`
+
+  // Replace existing fmtp line if present, otherwise insert after rtpmap
+  const fmtpRegex = new RegExp(`a=fmtp:${pt} [^\r\n]+\r\n`)
+  if (fmtpRegex.test(sdp)) {
+    return sdp.replace(fmtpRegex, qualityFmtp)
+  }
+  return sdp.replace(
+    new RegExp(`(a=rtpmap:${pt} opus/48000/2\r\n)`),
+    `$1${qualityFmtp}`
+  )
+}
+
 export interface VoiceSettings {
   inputDevice: string
   outputVolume: number
@@ -144,7 +164,7 @@ export class VoiceManager {
     try {
       await this.fetchIceServers()
 
-      this.audioContext = new AudioContext()
+      this.audioContext = new AudioContext({ sampleRate: 48000 })
       if (this.audioContext.state === 'suspended') {
         await this.audioContext.resume()
       }
@@ -155,6 +175,8 @@ export class VoiceManager {
           noiseSuppression: this.settings.noiseSuppression,
           echoCancellation: true,
           autoGainControl: true,
+          sampleRate: 48000,
+          channelCount: 1,
         },
       })
 
@@ -264,6 +286,7 @@ export class VoiceManager {
       config: {
         iceServers: this.iceServers,
       },
+      sdpTransform: setHighQualityOpus,
     })
 
     const audioEl = new Audio()
@@ -323,6 +346,23 @@ export class VoiceManager {
       this.destroyPeer(userId)
       this.speakingUsers.delete(userId)
       this.emit('speaking-change')
+    })
+
+    peer.on('connect', () => {
+      try {
+        const pc = (peer as unknown as { _pc: RTCPeerConnection })._pc
+        for (const sender of pc.getSenders()) {
+          if (sender.track?.kind === 'audio') {
+            const params = sender.getParameters()
+            if (params.encodings?.length) {
+              params.encodings[0].maxBitrate = 128_000 // 128 kbps ceiling
+              sender.setParameters(params).catch(() => {})
+            }
+          }
+        }
+      } catch {
+        // Non-critical; SDP transform already handles this
+      }
     })
 
     if (offer) {
@@ -398,6 +438,8 @@ export class VoiceManager {
         noiseSuppression: this.settings.noiseSuppression,
         echoCancellation: true,
         autoGainControl: true,
+        sampleRate: 48000,
+        channelCount: 1,
       },
     })
 

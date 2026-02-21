@@ -154,6 +154,10 @@ function RoomContent() {
       setUnreadCount((c) => c + 1)
     })
 
+    socket.on('chat:delete', ({ messageId }: { messageId: string }) => {
+      setMessages((prev) => prev.filter((m) => m.id !== messageId))
+    })
+
     socket.on('error', ({ message }) => {
       console.error('Server error:', message)
     })
@@ -170,6 +174,7 @@ function RoomContent() {
       socket.off('video:load')
       socket.off('queue:update')
       socket.off('chat:message')
+      socket.off('chat:delete')
       socket.off('error')
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -228,6 +233,10 @@ function RoomContent() {
 
   const handleSendMessage = (text: string) => {
     socket.emit('chat:message', { text })
+  }
+
+  const handleDeleteMessage = (messageId: string) => {
+    socket.emit('chat:delete', { messageId })
   }
 
   const switchTab = (tab: SidebarTab) => {
@@ -293,7 +302,7 @@ function RoomContent() {
     const tab = isMobile ? mobileTab : activeTab
     switch (tab) {
       case 'chat':
-        return <Chat messages={messages} onSendMessage={handleSendMessage} currentUserId={socket.id || ''} />
+        return <Chat messages={messages} onSendMessage={handleSendMessage} onDeleteMessage={handleDeleteMessage} currentUserId={socket.id || ''} />
       case 'people':
         return <UserList users={users} hostId={hostId} currentUserId={socket.id || ''} />
       case 'queue':
