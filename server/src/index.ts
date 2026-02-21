@@ -112,7 +112,7 @@ app.get('/api/comments/:videoId', async (req, res) => {
   let url = '';
   for (const instance of INVIDIOUS_INSTANCES) {
     try {
-      url = `https://${instance}/api/v1/comments/${videoId}?sort_by=${sortBy}`;
+      url = `https://${instance}/api/v1/comments/${videoId}?hl=en&sort_by=${sortBy}`;
       if (continuation) {
         url += `&continuation=${encodeURIComponent(continuation)}`;
       }
