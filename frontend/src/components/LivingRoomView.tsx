@@ -133,6 +133,144 @@ export default function LivingRoomView({
         opacity: 0.8,
       }} />
 
+      {/* === WALL SCONCE LIGHTS === */}
+      {/* Left sconce */}
+      <div style={{
+        position: 'absolute', left: '8%', top: '18%', zIndex: 4,
+        display: 'flex', flexDirection: 'column', alignItems: 'center',
+      }}>
+        {/* Wall glow cast */}
+        <div style={{
+          position: 'absolute', top: -40, left: '50%', transform: 'translateX(-50%)',
+          width: 120, height: 120,
+          background: `radial-gradient(ellipse at center, rgba(255,180,60,${0.25 * (1 - dimLevel)}) 0%, rgba(255,140,30,${0.08 * (1 - dimLevel)}) 50%, transparent 75%)`,
+          pointerEvents: 'none',
+          transition: 'all 0.4s ease',
+        }} />
+        {/* Fixture plate */}
+        <div style={{
+          width: 18, height: 8, borderRadius: '4px 4px 0 0',
+          background: 'linear-gradient(180deg, #3a2a1a, #2a1a0a)',
+          border: '1px solid rgba(255,255,255,0.05)',
+          borderBottom: 'none',
+        }} />
+        {/* Fixture arm */}
+        <div style={{ width: 3, height: 14, background: '#2a1a0a' }} />
+        {/* Shade */}
+        <div style={{
+          width: 28, height: 16, borderRadius: '3px 3px 8px 8px',
+          background: 'linear-gradient(180deg, #4a3520, #3a2515)',
+          border: '1px solid rgba(255,255,255,0.06)',
+          boxShadow: `0 4px 20px rgba(255,160,40,${0.3 * (1 - dimLevel)})`,
+          transition: 'box-shadow 0.4s ease',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          overflow: 'hidden',
+        }}>
+          {/* Visible bulb glow through shade */}
+          <div style={{
+            width: 12, height: 8, borderRadius: '50%',
+            background: `radial-gradient(ellipse at center, rgba(255,220,140,${0.9 * (1 - dimLevel)}), rgba(255,180,60,${0.4 * (1 - dimLevel)}), transparent)`,
+            transition: 'all 0.4s ease',
+          }} />
+        </div>
+        {/* Downward light cone */}
+        <div style={{
+          width: 0, height: 0,
+          borderLeft: '20px solid transparent',
+          borderRight: '20px solid transparent',
+          borderTop: `50px solid rgba(255,200,100,${0.04 * (1 - dimLevel)})`,
+          filter: 'blur(6px)',
+          transition: 'all 0.4s ease',
+          pointerEvents: 'none',
+        }} />
+      </div>
+
+      {/* Right sconce */}
+      <div style={{
+        position: 'absolute', right: '8%', top: '18%', zIndex: 4,
+        display: 'flex', flexDirection: 'column', alignItems: 'center',
+      }}>
+        {/* Wall glow cast */}
+        <div style={{
+          position: 'absolute', top: -40, left: '50%', transform: 'translateX(-50%)',
+          width: 120, height: 120,
+          background: `radial-gradient(ellipse at center, rgba(255,180,60,${0.25 * (1 - dimLevel)}) 0%, rgba(255,140,30,${0.08 * (1 - dimLevel)}) 50%, transparent 75%)`,
+          pointerEvents: 'none',
+          transition: 'all 0.4s ease',
+        }} />
+        {/* Fixture plate */}
+        <div style={{
+          width: 18, height: 8, borderRadius: '4px 4px 0 0',
+          background: 'linear-gradient(180deg, #3a2a1a, #2a1a0a)',
+          border: '1px solid rgba(255,255,255,0.05)',
+          borderBottom: 'none',
+        }} />
+        {/* Fixture arm */}
+        <div style={{ width: 3, height: 14, background: '#2a1a0a' }} />
+        {/* Shade */}
+        <div style={{
+          width: 28, height: 16, borderRadius: '3px 3px 8px 8px',
+          background: 'linear-gradient(180deg, #4a3520, #3a2515)',
+          border: '1px solid rgba(255,255,255,0.06)',
+          boxShadow: `0 4px 20px rgba(255,160,40,${0.3 * (1 - dimLevel)})`,
+          transition: 'box-shadow 0.4s ease',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          overflow: 'hidden',
+        }}>
+          {/* Visible bulb glow through shade */}
+          <div style={{
+            width: 12, height: 8, borderRadius: '50%',
+            background: `radial-gradient(ellipse at center, rgba(255,220,140,${0.9 * (1 - dimLevel)}), rgba(255,180,60,${0.4 * (1 - dimLevel)}), transparent)`,
+            transition: 'all 0.4s ease',
+          }} />
+        </div>
+        {/* Downward light cone */}
+        <div style={{
+          width: 0, height: 0,
+          borderLeft: '20px solid transparent',
+          borderRight: '20px solid transparent',
+          borderTop: `50px solid rgba(255,200,100,${0.04 * (1 - dimLevel)})`,
+          filter: 'blur(6px)',
+          transition: 'all 0.4s ease',
+          pointerEvents: 'none',
+        }} />
+      </div>
+
+      {/* Ceiling light */}
+      <div style={{
+        position: 'absolute', left: '50%', top: 0, transform: 'translateX(-50%)',
+        zIndex: 4, display: 'flex', flexDirection: 'column', alignItems: 'center',
+      }}>
+        {/* Ceiling mount */}
+        <div style={{ width: 24, height: 6, background: '#2a1a0a', borderRadius: '0 0 4px 4px' }} />
+        {/* Rod */}
+        <div style={{ width: 2, height: 18, background: '#2a1a0a' }} />
+        {/* Fixture body */}
+        <div style={{
+          width: 40, height: 18, borderRadius: '6px 6px 12px 12px',
+          background: 'linear-gradient(180deg, #4a3520, #3a2515)',
+          border: '1px solid rgba(255,255,255,0.06)',
+          display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+          paddingBottom: 2,
+          boxShadow: `0 6px 30px rgba(255,160,40,${0.35 * (1 - dimLevel)})`,
+          transition: 'box-shadow 0.4s ease',
+        }}>
+          {/* Bulb */}
+          <div style={{
+            width: 14, height: 10, borderRadius: '0 0 50% 50%',
+            background: `radial-gradient(ellipse at center, rgba(255,230,160,${0.95 * (1 - dimLevel)}), rgba(255,180,60,${0.5 * (1 - dimLevel)}), transparent)`,
+            transition: 'all 0.4s ease',
+          }} />
+        </div>
+        {/* Downward light pool */}
+        <div style={{
+          width: 200, height: 160,
+          background: `radial-gradient(ellipse at top center, rgba(255,200,100,${0.06 * (1 - dimLevel)}) 0%, transparent 70%)`,
+          pointerEvents: 'none',
+          transition: 'all 0.4s ease',
+        }} />
+      </div>
+
       {/* Dim lights overlay — sits above room bg/couch, below TV (z:10) */}
       <div style={{
         position: 'absolute', inset: 0, zIndex: 5,
@@ -147,6 +285,16 @@ export default function LivingRoomView({
         top: '3%', width: '54%', zIndex: 10,
         display: 'flex', flexDirection: 'column', alignItems: 'center',
       }}>
+        {/* TV screen glow — visible when lights are dimmed and TV is on */}
+        {isOn && (
+          <div style={{
+            position: 'absolute', inset: -30, zIndex: -1,
+            background: `radial-gradient(ellipse at center, rgba(100,140,255,${0.12 * dimLevel}) 0%, rgba(60,100,220,${0.06 * dimLevel}) 40%, transparent 70%)`,
+            pointerEvents: 'none',
+            transition: 'all 0.4s ease',
+            filter: 'blur(10px)',
+          }} />
+        )}
         {/* TV bezel */}
         <div style={{
           width: '100%',
@@ -156,7 +304,7 @@ export default function LivingRoomView({
           boxShadow: [
             '0 0 0 2px #1e1e1e',
             '0 28px 90px rgba(0,0,0,0.95)',
-            isOn ? '0 0 60px rgba(80,120,255,0.08)' : 'none',
+            isOn ? `0 0 ${40 + 60 * dimLevel}px rgba(80,120,255,${0.08 + 0.18 * dimLevel})` : 'none',
           ].join(', '),
           transition: 'box-shadow 0.4s',
         }}>
