@@ -12,7 +12,7 @@ export type ScreenShareEventHandler = (data?: unknown) => void
 export class ScreenShareManager {
   private socket: Socket
   private peers = new Map<string, SimplePeer.Instance>()
-  private localStream: MediaStream | null = null
+  private _localStream: MediaStream | null = null
   private _remoteStream: MediaStream | null = null
   private _isSharing = false
   private _isViewing = false
@@ -62,7 +62,7 @@ export class ScreenShareManager {
     })
 
     this.socket.on('screen:viewer-joined' as string, (data: { viewerId: string }) => {
-      if (!this._isSharing || !this.localStream) return
+      if (!this._isSharing || !this._localStream) return
       this.createPeerAsSharer(data.viewerId)
     })
 
@@ -107,7 +107,7 @@ export class ScreenShareManager {
     try {
       await this.fetchIceServers()
 
-      this.localStream = await navigator.mediaDevices.getDisplayMedia({
+      this._localStream = await navigator.mediaDevices.getDisplayMedia({
         video: {
           width: { ideal: 1920 },
           height: { ideal: 1080 },
@@ -117,7 +117,7 @@ export class ScreenShareManager {
       })
 
       // Detect when user stops sharing via browser's "Stop sharing" button
-      const videoTrack = this.localStream.getVideoTracks()[0]
+      const videoTrack = this._localStream.getVideoTracks()[0]
       if (videoTrack) {
         videoTrack.addEventListener('ended', () => {
           this.stopSharing()
@@ -130,9 +130,9 @@ export class ScreenShareManager {
       this.emit('state-change')
     } catch (err) {
       console.error('Failed to start screen share:', err)
-      if (this.localStream) {
-        this.localStream.getTracks().forEach((t) => t.stop())
-        this.localStream = null
+      if (this._localStream) {
+        this._localStream.getTracks().forEach((t) => t.stop())
+        this._localStream = null
       }
 
       if (err instanceof DOMException) {
@@ -159,9 +159,9 @@ export class ScreenShareManager {
       this.destroyPeer(peerId)
     }
 
-    if (this.localStream) {
-      this.localStream.getTracks().forEach((t) => t.stop())
-      this.localStream = null
+    if (this._localStream) {
+      this._localStream.getTracks().forEach((t) => t.stop())
+      this._localStream = null
     }
 
     this._isSharing = false
@@ -174,11 +174,11 @@ export class ScreenShareManager {
       this.destroyPeer(viewerId)
     }
 
-    if (!this.localStream) return
+    if (!this._localStream) return
 
     const peer = new SimplePeer({
       initiator: true,
-      stream: this.localStream,
+      stream: this._localStream,
       trickle: true,
       config: {
         iceServers: this.iceServers,
@@ -297,6 +297,7 @@ export class ScreenShareManager {
   get isSharing() { return this._isSharing }
   get isViewing() { return this._isViewing }
   get sharerId() { return this._sharerId }
+  get localStream() { return this._localStream }
   get remoteStream() { return this._remoteStream }
   get lastError() { return this._lastError }
 
@@ -308,9 +309,9 @@ export class ScreenShareManager {
       this.destroyPeer(peerId)
     }
 
-    if (this.localStream) {
-      this.localStream.getTracks().forEach((t) => t.stop())
-      this.localStream = null
+    if (this._localStream) {
+      this._localStream.getTracks().forEach((t) => t.stop())
+      this._localStream = null
     }
 
     this.socket.off('screen:started' as string)

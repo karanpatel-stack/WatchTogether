@@ -26,7 +26,14 @@ function RoomContent() {
   const { roomId } = useParams<{ roomId: string }>()
   const navigate = useNavigate()
   const { leaveVoice } = useVoice()
-  const { isSharing, isViewing, remoteStream, stopSharing, setInitialState } = useScreenShare()
+  const { isSharing, isViewing, localStream, remoteStream, stopSharing, setInitialState } = useScreenShare()
+  const localPreviewRef = useRef<HTMLVideoElement>(null)
+
+  useEffect(() => {
+    const video = localPreviewRef.current
+    if (!video) return
+    video.srcObject = isSharing && localStream ? localStream : null
+  }, [isSharing, localStream])
 
   const [users, setUsers] = useState<User[]>([])
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -396,6 +403,18 @@ function RoomContent() {
                 <p className="text-sm mt-1 text-white/10">
                   Paste a YouTube URL or direct video link above, or share your screen
                 </p>
+              </div>
+            )}
+            {/* Screen share local preview */}
+            {isSharing && (
+              <div className="absolute bottom-14 left-3 z-20 w-48 aspect-video rounded-xl overflow-hidden border border-white/10 shadow-[0_4px_24px_rgba(0,0,0,0.5)] bg-black">
+                <video
+                  ref={localPreviewRef}
+                  autoPlay
+                  muted
+                  playsInline
+                  className="w-full h-full object-contain"
+                />
               </div>
             )}
             {/* Voice Controls Overlay */}

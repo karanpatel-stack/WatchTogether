@@ -6,6 +6,7 @@ interface ScreenShareContextValue {
   isSharing: boolean
   isViewing: boolean
   sharerId: string | null
+  localStream: MediaStream | null
   remoteStream: MediaStream | null
   screenError: string | null
   startSharing: () => void
@@ -20,6 +21,7 @@ export function ScreenShareProvider({ children }: { children: React.ReactNode })
   const [isSharing, setIsSharing] = useState(false)
   const [isViewing, setIsViewing] = useState(false)
   const [sharerId, setSharerId] = useState<string | null>(null)
+  const [localStream, setLocalStream] = useState<MediaStream | null>(null)
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null)
   const [screenError, setScreenError] = useState<string | null>(null)
 
@@ -31,6 +33,7 @@ export function ScreenShareProvider({ children }: { children: React.ReactNode })
       setIsSharing(manager.isSharing)
       setIsViewing(manager.isViewing)
       setSharerId(manager.sharerId)
+      setLocalStream(manager.localStream)
       setRemoteStream(manager.remoteStream)
     })
 
@@ -71,6 +74,7 @@ export function ScreenShareProvider({ children }: { children: React.ReactNode })
         isSharing,
         isViewing,
         sharerId,
+        localStream,
         remoteStream,
         screenError,
         startSharing,
