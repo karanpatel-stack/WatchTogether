@@ -168,6 +168,13 @@ export function addMessage(room: Room, userId: string, text: string): ChatMessag
   return message;
 }
 
+export function deleteMessage(room: Room, userId: string, messageId: string): boolean {
+  const idx = room.messages.findIndex((m) => m.id === messageId && m.userId === userId)
+  if (idx === -1) return false
+  room.messages.splice(idx, 1)
+  return true
+}
+
 export function extractVideoId(url: string): string | null {
   const patterns = [
     /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/,

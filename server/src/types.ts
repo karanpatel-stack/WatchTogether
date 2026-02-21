@@ -67,6 +67,7 @@ export interface ClientToServerEvents {
   'queue:play': (data: { itemId: string }) => void;
   'queue:play-next': () => void;
   'chat:message': (data: { text: string }) => void;
+  'chat:delete': (data: { messageId: string }) => void;
   'voice:join': () => void;
   'voice:leave': () => void;
   'voice:offer': (data: { to: string; offer: RTCSessionDescriptionInit }) => void;
@@ -90,6 +91,7 @@ export interface ServerToClientEvents {
   'video:load': (data: { videoId: string; videoUrl: string }) => void;
   'queue:update': (data: { queue: QueueItem[] }) => void;
   'chat:message': (data: ChatMessage) => void;
+  'chat:delete': (data: { messageId: string }) => void;
   'voice:user-joined': (data: { userId: string }) => void;
   'voice:user-left': (data: { userId: string }) => void;
   'voice:offer': (data: { from: string; offer: RTCSessionDescriptionInit }) => void;

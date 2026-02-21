@@ -11,6 +11,7 @@ import {
   getRoomUsers,
   getVideoState,
   addMessage,
+  deleteMessage,
   extractVideoId,
   getRoomCount,
   getTotalUsers,
@@ -458,6 +459,15 @@ io.on('connection', (socket) => {
       io.to(room.id).emit('chat:message', message);
     }
   });
+
+  socket.on('chat:delete', (data) => {
+    const room = getUserRoom(socket.id)
+    if (!room) return
+    const deleted = deleteMessage(room, socket.id, data.messageId)
+    if (deleted) {
+      io.to(room.id).emit('chat:delete', { messageId: data.messageId })
+    }
+  })
 
   // --- Voice signaling ---
   socket.on('voice:join', () => {
