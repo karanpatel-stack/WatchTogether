@@ -19,7 +19,7 @@ import AmbientBackground from '../components/AmbientBackground'
 import { VoiceProvider, useVoice } from '../lib/VoiceContext'
 import { ScreenShareProvider, useScreenShare } from '../lib/ScreenShareContext'
 import { useAmbientColors } from '../hooks/useAmbientColors'
-import { MessageSquare, Users, X, ListMusic, MessageCircle, Settings } from 'lucide-react'
+import { MessageSquare, Users, X, ListMusic, MessageCircle, Settings, Moon } from 'lucide-react'
 
 type SidebarTab = 'chat' | 'people' | 'queue' | 'comments' | 'settings'
 
@@ -55,6 +55,8 @@ function RoomContent() {
   const [unreadCount, setUnreadCount] = useState(0)
   const [livingRoomMode, setLivingRoomMode] = useState(false)
   const [theatreUrlInput, setTheatreUrlInput] = useState(false)
+  const [lobbyOpen, setLobbyOpen] = useState(false)
+  const [dimLevel, setDimLevel] = useState(0)
   const [queue, setQueue] = useState<QueueItem[]>([])
 
   const myUserId = useRef(localStorage.getItem('wp_userId') || '')
@@ -300,6 +302,23 @@ function RoomContent() {
     </button>
   )
 
+  const lobbyTabButton = (tab: SidebarTab, label: string, icon: React.ReactNode, badge?: number) => (
+    <button
+      onClick={() => switchTab(tab)}
+      className={`flex-1 py-4 flex flex-col items-center justify-center gap-1.5 text-[9px] font-semibold uppercase tracking-wider transition-colors relative ${
+        activeTab === tab ? 'text-[var(--accent-text)] border-b-2 border-accent-500' : 'text-white/30 hover:text-white/50'
+      }`}
+    >
+      {icon}
+      {label && <span>{label}</span>}
+      {badge && badge > 0 && activeTab !== tab ? (
+        <span className="absolute top-2 right-1/4 bg-accent-500 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
+          {badge > 9 ? '9+' : badge}
+        </span>
+      ) : null}
+    </button>
+  )
+
   const mobileTabButton = (tab: SidebarTab, label: string, icon: React.ReactNode, badge?: number) => (
     <button
       onClick={() => switchMobileTab(tab)}
@@ -388,11 +407,54 @@ function RoomContent() {
                   onEnd={handleVideoEnded}
                   onToggleUrlInput={() => setTheatreUrlInput((v) => !v)}
                   urlInputOpen={theatreUrlInput}
+                  lobbyOpen={lobbyOpen}
+                  onToggleLobby={() => setLobbyOpen((v) => !v)}
+                  dimLevel={dimLevel}
                 />
                 {/* Floating URL input overlay in Theatre mode */}
                 {theatreUrlInput && (
                   <div className="absolute top-0 left-0 right-0 z-30">
                     <VideoUrlInput onLoadVideo={handleLoadVideo} onAddToQueue={handleAddToQueue} />
+                  </div>
+                )}
+                {/* Lobby panel overlay in Theatre mode */}
+                {lobbyOpen && (
+                  <div className="absolute right-0 top-0 bottom-0 z-20 w-80 flex flex-col bg-panel backdrop-blur-xl border-l border-panel shadow-[-4px_0_30px_rgba(0,0,0,0.4)]">
+                    <div className="flex border-b border-panel">
+                      {lobbyTabButton('chat', 'Chat', <MessageSquare className="w-4 h-4" />, unreadCount)}
+                      {lobbyTabButton('people', 'People', <Users className="w-4 h-4" />)}
+                      {lobbyTabButton('queue', 'Queue', <ListMusic className="w-4 h-4" />)}
+                      {lobbyTabButton('comments', 'Comments', <MessageCircle className="w-4 h-4" />)}
+                      {lobbyTabButton('settings', 'Settings', <Settings className="w-4 h-4" />)}
+                    </div>
+                    {activeTab === 'settings' ? (
+                      <div className="flex-1 overflow-y-auto min-h-0 flex flex-col">
+                        {/* Dim Lights */}
+                        <div className="p-4 border-b border-panel">
+                          <div className="flex items-center gap-2 mb-3">
+                            <Moon className="w-4 h-4 text-white/40" />
+                            <h3 className="text-xs font-semibold uppercase tracking-wider text-white/40">Dim Lights</h3>
+                            <span className="ml-auto text-[10px] text-white/20">{Math.round(dimLevel * 100)}%</span>
+                          </div>
+                          <input
+                            type="range"
+                            min="0"
+                            max="100"
+                            step="1"
+                            value={Math.round(dimLevel * 100)}
+                            onChange={(e) => setDimLevel(Number(e.target.value) / 100)}
+                            className="w-full h-2"
+                          />
+                          <div className="flex justify-between text-[10px] text-white/20 mt-1.5">
+                            <span>Off</span>
+                            <span>Full Dark</span>
+                          </div>
+                        </div>
+                        {renderTabContent()}
+                      </div>
+                    ) : (
+                      renderTabContent()
+                    )}
                   </div>
                 )}
               </>
@@ -491,7 +553,7 @@ function RoomContent() {
       </div>
 
       {/* Mobile Bottom Bar */}
-      <div className="lg:hidden flex border-t border-panel bg-panel backdrop-blur-xl shadow-[0_-1px_20px_rgba(0,0,0,0.3)]">
+      <div className={`${livingRoomMode ? 'hidden' : 'lg:hidden flex'} border-t border-panel bg-panel backdrop-blur-xl shadow-[0_-1px_20px_rgba(0,0,0,0.3)]`}>
         {mobileTabButton('chat', 'Chat', <MessageSquare className="w-4 h-4" />, unreadCount)}
         {mobileTabButton('people', 'People', <Users className="w-4 h-4" />)}
         {mobileTabButton('queue', 'Queue', <ListMusic className="w-4 h-4" />)}

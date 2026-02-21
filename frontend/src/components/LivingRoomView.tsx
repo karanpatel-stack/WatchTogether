@@ -1,5 +1,5 @@
 import { useRef, useEffect } from 'react'
-import { Link } from 'lucide-react'
+import { Link, Users } from 'lucide-react'
 import type { User, VideoState } from '../lib/types'
 import VideoPlayer from './VideoPlayer'
 import DirectVideoPlayer from './DirectVideoPlayer'
@@ -34,6 +34,9 @@ interface Props {
   onEnd: () => void
   onToggleUrlInput: () => void
   urlInputOpen: boolean
+  lobbyOpen: boolean
+  onToggleLobby: () => void
+  dimLevel: number
 }
 
 function Avatar({ user, color }: { user: User | null; color: string }) {
@@ -75,7 +78,7 @@ function Avatar({ user, color }: { user: User | null; color: string }) {
 
 export default function LivingRoomView({
   users, videoState, isSharing, isViewing, localStream, remoteStream,
-  onPlay, onPause, onSeek, onEnd, onToggleUrlInput, urlInputOpen,
+  onPlay, onPause, onSeek, onEnd, onToggleUrlInput, urlInputOpen, lobbyOpen, onToggleLobby, dimLevel,
 }: Props) {
   const previewRef = useRef<HTMLVideoElement>(null)
 
@@ -130,10 +133,18 @@ export default function LivingRoomView({
         opacity: 0.8,
       }} />
 
+      {/* Dim lights overlay — sits above room bg/couch, below TV (z:10) */}
+      <div style={{
+        position: 'absolute', inset: 0, zIndex: 5,
+        background: `rgba(0,0,0,${dimLevel})`,
+        pointerEvents: 'none',
+        transition: 'background 0.15s',
+      }} />
+
       {/* === TV === */}
       <div style={{
         position: 'absolute', left: '50%', transform: 'translateX(-50%)',
-        top: '3%', width: '54%',
+        top: '3%', width: '54%', zIndex: 10,
         display: 'flex', flexDirection: 'column', alignItems: 'center',
       }}>
         {/* TV bezel */}
@@ -176,24 +187,43 @@ export default function LivingRoomView({
           borderRadius: '6px 6px 0 0',
           boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
         }} />
-        {/* Change Video button */}
-        <button
-          onClick={onToggleUrlInput}
-          style={{
-            marginTop: 10,
-            display: 'flex', alignItems: 'center', gap: 6,
-            padding: '5px 12px',
-            borderRadius: 8,
-            border: urlInputOpen ? '1px solid rgba(var(--accent-rgb,99,102,241),0.4)' : '1px solid rgba(255,255,255,0.08)',
-            background: urlInputOpen ? 'rgba(var(--accent-rgb,99,102,241),0.15)' : 'rgba(255,255,255,0.05)',
-            color: urlInputOpen ? 'rgba(255,255,255,0.8)' : 'rgba(255,255,255,0.35)',
-            fontSize: 11, fontWeight: 600, cursor: 'pointer',
-            transition: 'all 0.2s',
-          }}
-        >
-          <Link size={12} />
-          Change Video
-        </button>
+        {/* Buttons row */}
+        <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+          {/* Change Video button */}
+          <button
+            onClick={onToggleUrlInput}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              padding: '5px 12px',
+              borderRadius: 8,
+              border: urlInputOpen ? '1px solid rgba(var(--accent-rgb,99,102,241),0.4)' : '1px solid rgba(255,255,255,0.08)',
+              background: urlInputOpen ? 'rgba(var(--accent-rgb,99,102,241),0.15)' : 'rgba(255,255,255,0.05)',
+              color: urlInputOpen ? 'rgba(255,255,255,0.8)' : 'rgba(255,255,255,0.35)',
+              fontSize: 11, fontWeight: 600, cursor: 'pointer',
+              transition: 'all 0.2s',
+            }}
+          >
+            <Link size={12} />
+            Change Video
+          </button>
+          {/* Lobby button */}
+          <button
+            onClick={onToggleLobby}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              padding: '5px 12px',
+              borderRadius: 8,
+              border: lobbyOpen ? '1px solid rgba(var(--accent-rgb,99,102,241),0.4)' : '1px solid rgba(255,255,255,0.08)',
+              background: lobbyOpen ? 'rgba(var(--accent-rgb,99,102,241),0.15)' : 'rgba(255,255,255,0.05)',
+              color: lobbyOpen ? 'rgba(255,255,255,0.8)' : 'rgba(255,255,255,0.35)',
+              fontSize: 11, fontWeight: 600, cursor: 'pointer',
+              transition: 'all 0.2s',
+            }}
+          >
+            <Users size={12} />
+            Lobby
+          </button>
+        </div>
       </div>
 
       {/* === STRAIGHT COUCH — 8 seats in one row === */}
