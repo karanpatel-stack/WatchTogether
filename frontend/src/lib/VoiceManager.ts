@@ -164,21 +164,23 @@ export class VoiceManager {
     try {
       await this.fetchIceServers()
 
-      this.audioContext = new AudioContext({ sampleRate: 48000 })
-      if (this.audioContext.state === 'suspended') {
-        await this.audioContext.resume()
-      }
-
       this.localStream = await navigator.mediaDevices.getUserMedia({
         audio: {
           deviceId: this.settings.inputDevice !== 'default' ? { exact: this.settings.inputDevice } : undefined,
           noiseSuppression: this.settings.noiseSuppression,
           echoCancellation: true,
           autoGainControl: true,
-          sampleRate: 48000,
           channelCount: 1,
         },
       })
+
+      // Create AudioContext matching the mic's actual sample rate to avoid cross-rate errors
+      const trackSettings = this.localStream.getAudioTracks()[0]?.getSettings()
+      const sampleRate = trackSettings?.sampleRate || undefined
+      this.audioContext = new AudioContext(sampleRate ? { sampleRate } : undefined)
+      if (this.audioContext.state === 'suspended') {
+        await this.audioContext.resume()
+      }
 
       // Set up input gain control
       const source = this.audioContext.createMediaStreamSource(this.localStream)
@@ -438,7 +440,6 @@ export class VoiceManager {
         noiseSuppression: this.settings.noiseSuppression,
         echoCancellation: true,
         autoGainControl: true,
-        sampleRate: 48000,
         channelCount: 1,
       },
     })
