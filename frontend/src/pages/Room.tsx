@@ -382,6 +382,7 @@ function RoomContent() {
         onLeave={handleLeave}
         livingRoomMode={livingRoomMode}
         onToggleLivingRoom={() => setLivingRoomMode((m) => !m)}
+        dimLevel={dimLevel}
       />
 
       <div className="flex-1 flex min-h-0">
@@ -413,12 +414,17 @@ function RoomContent() {
                 />
                 {/* Floating URL input overlay in Theatre mode */}
                 {theatreUrlInput && (
-                  <div className="absolute top-0 left-0 right-0 z-30">
-                    <VideoUrlInput onLoadVideo={handleLoadVideo} onAddToQueue={handleAddToQueue} />
-                  </div>
+                  <>
+                    <div className="absolute inset-0 z-[29]" onMouseDown={() => setTheatreUrlInput(false)} />
+                    <div className="absolute top-0 left-0 right-0 z-30">
+                      <VideoUrlInput onLoadVideo={handleLoadVideo} onAddToQueue={handleAddToQueue} />
+                    </div>
+                  </>
                 )}
                 {/* Lobby panel overlay in Theatre mode */}
                 {lobbyOpen && (
+                  <>
+                  <div className="absolute inset-0 z-[19]" onMouseDown={() => setLobbyOpen(false)} />
                   <div className="absolute right-0 top-0 bottom-0 z-20 w-80 flex flex-col bg-panel backdrop-blur-xl border-l border-panel shadow-[-4px_0_30px_rgba(0,0,0,0.4)]">
                     <div className="flex border-b border-panel">
                       {lobbyTabButton('chat', 'Chat', <MessageSquare className="w-4 h-4" />, unreadCount)}
@@ -456,6 +462,7 @@ function RoomContent() {
                       renderTabContent()
                     )}
                   </div>
+                  </>
                 )}
               </>
             ) : (

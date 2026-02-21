@@ -9,9 +9,10 @@ interface Props {
   onLeave: () => void
   livingRoomMode: boolean
   onToggleLivingRoom: () => void
+  dimLevel: number
 }
 
-export default function RoomHeader({ roomId, isHost, userCount, onLeave, livingRoomMode, onToggleLivingRoom }: Props) {
+export default function RoomHeader({ roomId, isHost, userCount, onLeave, livingRoomMode, onToggleLivingRoom, dimLevel }: Props) {
   const [copied, setCopied] = useState(false)
   const { isMuted, isInVoice, toggleMute, voiceSettings } = useVoice()
 
@@ -22,7 +23,17 @@ export default function RoomHeader({ roomId, isHost, userCount, onLeave, livingR
   }
 
   return (
-    <header className="flex items-center justify-between px-4 py-3 border-b border-panel bg-panel backdrop-blur-xl shadow-[0_1px_20px_rgba(0,0,0,0.3)]">
+    <header
+      className={`flex items-center justify-between px-4 py-3 border-b shadow-[0_1px_20px_rgba(0,0,0,0.3)] transition-[background,border-color] duration-300 ${
+        livingRoomMode ? 'border-[#2a1508]/60' : 'border-panel bg-panel backdrop-blur-xl'
+      }`}
+      style={livingRoomMode ? {
+        background: `linear-gradient(90deg,
+          rgba(30,16,8,${0.95 + dimLevel * 0.05}) 0%,
+          rgba(19,10,4,${0.95 + dimLevel * 0.05}) 100%)`,
+        boxShadow: `0 1px 20px rgba(0,0,0,${0.3 + dimLevel * 0.4})`,
+      } : undefined}
+    >
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-lg bg-accent-600/20 border border-accent-500/10 flex items-center justify-center">
