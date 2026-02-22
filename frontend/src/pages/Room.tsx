@@ -271,8 +271,8 @@ function RoomContent() {
     socket.emit('video:ended')
   }
 
-  const handlePlay = (currentTime: number) => {
-    socket.emit('video:play', { currentTime })
+  const handlePlay = () => {
+    socket.emit('video:play')
   }
 
   const handlePause = (currentTime: number) => {

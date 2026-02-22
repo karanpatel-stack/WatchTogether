@@ -4,7 +4,7 @@ import type { VideoState } from '../lib/types'
 
 interface Props {
   videoState: VideoState
-  onPlay: (currentTime: number) => void
+  onPlay: () => void
   onPause: (currentTime: number) => void
   onSeek: (currentTime: number) => void
   onEnd?: () => void
@@ -177,7 +177,7 @@ export default function DirectVideoPlayer({ videoState, onPlay, onPause, onSeek,
     }
     if (playDebounceTimer.current) clearTimeout(playDebounceTimer.current)
     playDebounceTimer.current = setTimeout(() => {
-      onPlay(video.currentTime)
+      onPlay()
       playDebounceTimer.current = null
     }, 100)
   }

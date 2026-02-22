@@ -28,7 +28,7 @@ interface Props {
   isViewing: boolean
   localStream: MediaStream | null
   remoteStream: MediaStream | null
-  onPlay: (t: number) => void
+  onPlay: () => void
   onPause: (t: number) => void
   onSeek: (t: number) => void
   onEnd: () => void

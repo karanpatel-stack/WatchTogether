@@ -252,12 +252,14 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('video:play', (data) => {
+  socket.on('video:play', () => {
     const room = getUserRoom(socket.id);
     if (!room) return;
 
+    // Don't update currentTime — keep the value from the last pause/seek.
+    // YouTube's getCurrentTime() can report a stale keyframe position at
+    // play-start, which would jump everyone backwards.
     room.isPlaying = true;
-    room.currentTime = data.currentTime;
     room.lastSyncTime = Date.now();
     room.seq++;
 

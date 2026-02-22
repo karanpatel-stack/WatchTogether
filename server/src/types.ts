@@ -59,7 +59,7 @@ export interface ClientToServerEvents {
   'room:join': (data: { roomId: string; userName: string }, callback: (response: { success: boolean; error?: string; userId?: string }) => void) => void;
   'room:leave': () => void;
   'video:load': (data: { url: string }) => void;
-  'video:play': (data: { currentTime: number }) => void;
+  'video:play': () => void;
   'video:pause': (data: { currentTime: number }) => void;
   'video:seek': (data: { currentTime: number }) => void;
   'video:rate': (data: { rate: number }) => void;

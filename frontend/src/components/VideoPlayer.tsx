@@ -4,7 +4,7 @@ import type { VideoState } from '../lib/types'
 
 interface Props {
   videoState: VideoState
-  onPlay: (currentTime: number) => void
+  onPlay: () => void
   onPause: (currentTime: number) => void
   onSeek: (currentTime: number) => void
   onEnd?: () => void
@@ -140,7 +140,7 @@ export default function VideoPlayer({ videoState, onPlay, onPause, onSeek, onEnd
       }
       if (playDebounceTimer.current) clearTimeout(playDebounceTimer.current)
       playDebounceTimer.current = setTimeout(() => {
-        onPlay(currentTime)
+        onPlay()
         playDebounceTimer.current = null
       }, 100)
     }
