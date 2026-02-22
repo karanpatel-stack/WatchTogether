@@ -173,14 +173,14 @@ function SeekDetector({
       try {
         const currentTime = playerRef.current.getCurrentTime()
         const diff = Math.abs(currentTime - seekDetectorLastTime.current)
-        if (diff > 2 && seekDetectorLastTime.current > 0) {
+        if (diff > 1 && seekDetectorLastTime.current > 0) {
           onSeek()
         }
         seekDetectorLastTime.current = currentTime
       } catch {
         // Player not ready
       }
-    }, 1000)
+    }, 250)
 
     return () => clearInterval(interval)
   }, [playerRef, onSeek, isRemoteUpdate, seekDetectorLastTime])

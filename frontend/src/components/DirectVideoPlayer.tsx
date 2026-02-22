@@ -168,7 +168,7 @@ export default function DirectVideoPlayer({ videoState, onPlay, onPause, onSeek,
     if (!video) return
 
     const diff = Math.abs(video.currentTime - lastSeekTime.current)
-    if (diff > 2) {
+    if (diff > 1) {
       onSeek(video.currentTime)
     }
     lastSeekTime.current = video.currentTime
