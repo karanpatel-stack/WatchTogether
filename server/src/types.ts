@@ -64,7 +64,6 @@ export interface ClientToServerEvents {
   'video:seek': (data: { currentTime: number }) => void;
   'video:rate': (data: { rate: number }) => void;
   'video:ended': () => void;
-  'video:sync-request': () => void;
   'queue:add': (data: { url: string }, callback: (response: { success: boolean; error?: string }) => void) => void;
   'queue:remove': (data: { itemId: string }) => void;
   'queue:reorder': (data: { itemId: string; newIndex: number }) => void;

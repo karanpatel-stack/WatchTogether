@@ -298,13 +298,6 @@ io.on('connection', (socket) => {
     io.to(room.id).emit('video:state-update', getVideoState(room));
   });
 
-  // Periodic sync: clients request current authoritative state
-  socket.on('video:sync-request', () => {
-    const room = getUserRoom(socket.id);
-    if (!room) return;
-    socket.emit('video:state-update', getVideoState(room));
-  });
-
   socket.on('video:ended', () => {
     const room = getUserRoom(socket.id);
     if (!room) return;

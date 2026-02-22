@@ -1,6 +1,5 @@
 import { useEffect, useRef, useCallback } from 'react'
 import Hls from 'hls.js'
-import { socket } from '../lib/socket'
 import type { VideoState } from '../lib/types'
 
 interface Props {
@@ -20,10 +19,6 @@ export default function DirectVideoPlayer({ videoState, onPlay, onPause, onSeek,
   const playDebounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pauseDebounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastSeekTime = useRef(0)
-  // Track videoState in a ref for drift correction
-  const videoStateRef = useRef(videoState)
-  videoStateRef.current = videoState
-
   const isHlsUrl = /\.m3u8(\?.*)?$/i.test(videoState.videoUrl)
 
   const setRemoteLock = useCallback((duration: number) => {
@@ -60,7 +55,7 @@ export default function DirectVideoPlayer({ videoState, onPlay, onPause, onSeek,
         hls.attachMedia(video)
         // Auto-play once manifest is parsed
         hls.on(Hls.Events.MANIFEST_PARSED, () => {
-          if (videoStateRef.current.isPlaying) {
+          if (videoState.isPlaying) {
             video.play().catch(() => {})
           }
         })
@@ -74,7 +69,7 @@ export default function DirectVideoPlayer({ videoState, onPlay, onPause, onSeek,
 
     // Auto-play the new source if server says isPlaying
     const handleCanPlay = () => {
-      if (videoStateRef.current.isPlaying && video.paused) {
+      if (videoState.isPlaying && video.paused) {
         setRemoteLock(200)
         video.play().catch(() => {})
       }
@@ -125,33 +120,6 @@ export default function DirectVideoPlayer({ videoState, onPlay, onPause, onSeek,
   useEffect(() => {
     syncPlayer()
   }, [syncPlayer])
-
-  // Periodic drift correction: every 5s, check we're still in sync
-  useEffect(() => {
-    const driftInterval = setInterval(() => {
-      const video = videoRef.current
-      if (!video || isRemoteUpdate.current) return
-
-      const vs = videoStateRef.current
-      if (!vs.isPlaying || video.paused) return
-
-      const elapsed = (Date.now() - vs.timestamp) / 1000
-      const expectedTime = vs.currentTime + elapsed
-      const drift = Math.abs(video.currentTime - expectedTime)
-
-      if (drift > 2) {
-        // Large drift — request fresh state from server
-        socket.emit('video:sync-request')
-      } else if (drift > 1) {
-        // Moderate drift — correct locally
-        setRemoteLock(200)
-        video.currentTime = expectedTime
-        lastSeekTime.current = expectedTime
-      }
-    }, 5000)
-
-    return () => clearInterval(driftInterval)
-  }, [setRemoteLock])
 
   // Clean up timers on unmount
   useEffect(() => {

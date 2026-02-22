@@ -1,6 +1,5 @@
 import { useEffect, useRef, useCallback } from 'react'
 import YouTube, { YouTubeEvent, YouTubePlayer } from 'react-youtube'
-import { socket } from '../lib/socket'
 import type { VideoState } from '../lib/types'
 
 interface Props {
@@ -19,10 +18,6 @@ export default function VideoPlayer({ videoState, onPlay, onPause, onSeek, onEnd
   const seekDetectorLastTime = useRef(0)
   const playDebounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pauseDebounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  // Track the videoState in a ref for the drift correction interval
-  const videoStateRef = useRef(videoState)
-  videoStateRef.current = videoState
-
   const setRemoteLock = useCallback((duration: number) => {
     isRemoteUpdate.current = true
     if (remoteUpdateTimer.current) clearTimeout(remoteUpdateTimer.current)
@@ -72,38 +67,6 @@ export default function VideoPlayer({ videoState, onPlay, onPause, onSeek, onEnd
   useEffect(() => {
     syncPlayer()
   }, [syncPlayer])
-
-  // Periodic drift correction: every 5s, check we're still in sync
-  useEffect(() => {
-    const driftInterval = setInterval(() => {
-      const player = playerRef.current
-      if (!player || isRemoteUpdate.current) return
-
-      const vs = videoStateRef.current
-      if (!vs.isPlaying) return
-
-      try {
-        const currentTime = player.getCurrentTime()
-        const elapsed = (Date.now() - vs.timestamp) / 1000
-        const expectedTime = vs.currentTime + elapsed
-        const drift = Math.abs(currentTime - expectedTime)
-
-        if (drift > 2) {
-          // Large drift — request fresh state from server
-          socket.emit('video:sync-request')
-        } else if (drift > 1) {
-          // Moderate drift — correct locally without network round-trip
-          setRemoteLock(200)
-          player.seekTo(expectedTime, true)
-          seekDetectorLastTime.current = expectedTime
-        }
-      } catch {
-        // Player not ready
-      }
-    }, 5000)
-
-    return () => clearInterval(driftInterval)
-  }, [setRemoteLock])
 
   // Clean up timers on unmount
   useEffect(() => {
