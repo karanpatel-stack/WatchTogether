@@ -330,9 +330,9 @@ export class VoiceManager {
       this.analyserNode = this.audioContext.createAnalyser()
       this.analyserNode.fftSize = 2048
 
-      // Noise gate (GainNode controlled by VAD)
+      // Noise gate (GainNode controlled by VAD) — starts open, VAD closes it on silence
       this.noiseGateGain = this.audioContext.createGain()
-      this.noiseGateGain.gain.value = NOISE_GATE_FLOOR // start at comfort noise floor
+      this.noiseGateGain.gain.value = 1.0
 
       // Output destination for processed stream
       this.processedStreamDest = this.audioContext.createMediaStreamDestination()
@@ -364,10 +364,10 @@ export class VoiceManager {
       // Use processed stream for WebRTC
       this.processedStream = this.processedStreamDest.stream
 
-      // Start muted
+      // Start muted — only disable source tracks; processedStream stays enabled
+      // so WebRTC keeps the track alive, and the pipeline just receives silence
       this.isMuted = true
       this.localStream.getAudioTracks().forEach((t) => (t.enabled = false))
-      this.processedStream.getAudioTracks().forEach((t) => (t.enabled = false))
 
       this.isInVoice = true
       this.voiceUsers.add(this.socket.id!)
@@ -634,7 +634,6 @@ export class VoiceManager {
 
     this.isMuted = muted
     this.localStream?.getAudioTracks().forEach((t) => (t.enabled = !muted))
-    this.processedStream?.getAudioTracks().forEach((t) => (t.enabled = !muted))
     this.emit('muted-change')
   }
 
@@ -738,7 +737,6 @@ export class VoiceManager {
     if (this.isInVoice) {
       this.isMuted = true
       this.localStream?.getAudioTracks().forEach((t) => (t.enabled = false))
-      this.processedStream?.getAudioTracks().forEach((t) => (t.enabled = false))
       this.emit('muted-change')
     }
   }
@@ -752,7 +750,6 @@ export class VoiceManager {
       this.pttKeyDown = true
       this.isMuted = false
       this.localStream?.getAudioTracks().forEach((t) => (t.enabled = true))
-      this.processedStream?.getAudioTracks().forEach((t) => (t.enabled = true))
       this.emit('muted-change')
     }
   }
@@ -763,7 +760,6 @@ export class VoiceManager {
       this.pttKeyDown = false
       this.isMuted = true
       this.localStream?.getAudioTracks().forEach((t) => (t.enabled = false))
-      this.processedStream?.getAudioTracks().forEach((t) => (t.enabled = false))
       this.emit('muted-change')
     }
   }
@@ -773,7 +769,6 @@ export class VoiceManager {
       this.pttKeyDown = false
       this.isMuted = true
       this.localStream?.getAudioTracks().forEach((t) => (t.enabled = false))
-      this.processedStream?.getAudioTracks().forEach((t) => (t.enabled = false))
       this.emit('muted-change')
     }
   }
