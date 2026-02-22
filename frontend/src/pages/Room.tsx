@@ -419,7 +419,7 @@ function RoomContent() {
           {!livingRoomMode && <VideoUrlInput onLoadVideo={handleLoadVideo} onAddToQueue={handleAddToQueue} />}
 
           {/* Video Player */}
-          <div className="flex-1 relative bg-black/40">
+          <div className="flex-1 relative bg-black/40 overflow-hidden">
             {livingRoomMode ? (
               <>
                 <LivingRoomView
@@ -437,52 +437,77 @@ function RoomContent() {
                   onToggleLobby={() => setLobbyOpen((v) => !v)}
                   dimLevel={dimLevel}
                 />
+                {/* Hover trigger zone for Theatre URL input */}
+                {!theatreUrlInput && (
+                  <div
+                    className="absolute top-0 left-0 right-0 h-[40px] z-30"
+                    onMouseEnter={() => setTheatreUrlInput(true)}
+                  />
+                )}
                 {/* Floating URL input overlay in Theatre mode */}
-                {theatreUrlInput && (
-                  <div ref={theatreUrlRef} className="absolute top-0 left-0 z-30" style={{ right: lobbyOpen ? 320 : 0, transition: 'right 0.3s ease' }}>
-                    <VideoUrlInput onLoadVideo={handleLoadVideo} onAddToQueue={handleAddToQueue} />
-                  </div>
+                <div
+                  ref={theatreUrlRef}
+                  className="absolute top-0 left-0 z-30"
+                  style={{
+                    right: lobbyOpen ? 320 : 0,
+                    transform: theatreUrlInput ? 'translateY(0)' : 'translateY(-100%)',
+                    transition: 'right 0.3s ease, transform 0.3s ease-in-out',
+                    pointerEvents: theatreUrlInput ? 'auto' : 'none',
+                  }}
+                  onMouseLeave={() => setTheatreUrlInput(false)}
+                >
+                  <VideoUrlInput onLoadVideo={handleLoadVideo} onAddToQueue={handleAddToQueue} />
+                </div>
+                {/* Hover trigger zone for Theatre side panel */}
+                {!lobbyOpen && (
+                  <div
+                    className="absolute right-0 top-0 bottom-[52px] w-[40px] z-20"
+                    onMouseEnter={() => setLobbyOpen(true)}
+                  />
                 )}
                 {/* Lobby panel overlay in Theatre mode */}
-                {lobbyOpen && (
-                  <div ref={lobbyPanelRef} className="absolute right-0 top-0 bottom-0 z-20 w-80 flex flex-col bg-panel backdrop-blur-xl border-l border-panel shadow-[-4px_0_30px_rgba(0,0,0,0.4)]">
-                    <div className="flex border-b border-panel">
-                      {lobbyTabButton('chat', 'Chat', <MessageSquare className="w-4 h-4" />, unreadCount)}
-                      {lobbyTabButton('people', 'People', <Users className="w-4 h-4" />)}
-                      {lobbyTabButton('queue', 'Queue', <ListMusic className="w-4 h-4" />)}
-                      {lobbyTabButton('comments', 'Comments', <MessageCircle className="w-4 h-4" />)}
-                      {lobbyTabButton('settings', 'Settings', <Settings className="w-4 h-4" />)}
-                    </div>
-                    {activeTab === 'settings' ? (
-                      <div className="flex-1 overflow-y-auto min-h-0 flex flex-col">
-                        {/* Dim Lights */}
-                        <div className="p-4 border-b border-panel">
-                          <div className="flex items-center gap-2 mb-3">
-                            <Moon className="w-4 h-4 text-white/40" />
-                            <h3 className="text-xs font-semibold uppercase tracking-wider text-white/40">Dim Lights</h3>
-                            <span className="ml-auto text-[10px] text-white/20">{Math.round(dimLevel * 100)}%</span>
-                          </div>
-                          <input
-                            type="range"
-                            min="0"
-                            max="100"
-                            step="1"
-                            value={Math.round(dimLevel * 100)}
-                            onChange={(e) => setDimLevel(Number(e.target.value) / 100)}
-                            className="w-full h-2"
-                          />
-                          <div className="flex justify-between text-[10px] text-white/20 mt-1.5">
-                            <span>Off</span>
-                            <span>Full Dark</span>
-                          </div>
-                        </div>
-                        {renderTabContent()}
-                      </div>
-                    ) : (
-                      renderTabContent()
-                    )}
+                <div
+                  ref={lobbyPanelRef}
+                  className={`absolute right-0 top-0 bottom-0 z-20 w-80 flex flex-col bg-panel backdrop-blur-xl border-l border-panel shadow-[-4px_0_30px_rgba(0,0,0,0.4)] transition-transform duration-300 ease-in-out ${lobbyOpen ? 'translate-x-0' : 'translate-x-full'}`}
+                  onMouseLeave={() => setLobbyOpen(false)}
+                  style={{ pointerEvents: lobbyOpen ? 'auto' : 'none' }}
+                >
+                  <div className="flex border-b border-panel">
+                    {lobbyTabButton('chat', 'Chat', <MessageSquare className="w-4 h-4" />, unreadCount)}
+                    {lobbyTabButton('people', 'People', <Users className="w-4 h-4" />)}
+                    {lobbyTabButton('queue', 'Queue', <ListMusic className="w-4 h-4" />)}
+                    {lobbyTabButton('comments', 'Comments', <MessageCircle className="w-4 h-4" />)}
+                    {lobbyTabButton('settings', 'Settings', <Settings className="w-4 h-4" />)}
                   </div>
-                )}
+                  {activeTab === 'settings' ? (
+                    <div className="flex-1 overflow-y-auto min-h-0 flex flex-col">
+                      {/* Dim Lights */}
+                      <div className="p-4 border-b border-panel">
+                        <div className="flex items-center gap-2 mb-3">
+                          <Moon className="w-4 h-4 text-white/40" />
+                          <h3 className="text-xs font-semibold uppercase tracking-wider text-white/40">Dim Lights</h3>
+                          <span className="ml-auto text-[10px] text-white/20">{Math.round(dimLevel * 100)}%</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="0"
+                          max="100"
+                          step="1"
+                          value={Math.round(dimLevel * 100)}
+                          onChange={(e) => setDimLevel(Number(e.target.value) / 100)}
+                          className="w-full h-2"
+                        />
+                        <div className="flex justify-between text-[10px] text-white/20 mt-1.5">
+                          <span>Off</span>
+                          <span>Full Dark</span>
+                        </div>
+                      </div>
+                      {renderTabContent()}
+                    </div>
+                  ) : (
+                    renderTabContent()
+                  )}
+                </div>
               </>
             ) : (
               <>
