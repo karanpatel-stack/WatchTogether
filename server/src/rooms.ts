@@ -137,14 +137,21 @@ export function getRoomUsers(room: Room): User[] {
 }
 
 export function getVideoState(room: Room): VideoState {
+  // Compute expected position at this moment (server-side only).
+  // Clients use currentTime directly — no cross-clock math needed.
+  let currentTime = room.currentTime;
+  if (room.isPlaying) {
+    const elapsed = (Date.now() - room.lastSyncTime) / 1000;
+    currentTime += elapsed;
+  }
   return {
     videoId: room.videoId,
     videoUrl: room.videoUrl,
     videoType: room.videoType,
     isPlaying: room.isPlaying,
-    currentTime: room.currentTime,
+    currentTime,
     playbackRate: room.playbackRate,
-    timestamp: room.lastSyncTime,
+    timestamp: Date.now(),
     seq: room.seq,
   };
 }

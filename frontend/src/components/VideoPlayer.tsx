@@ -21,6 +21,7 @@ export default function VideoPlayer({ videoState, heartbeat, onPlay, onPause, on
   const pauseDebounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const videoStateRef = useRef(videoState)
   videoStateRef.current = videoState
+  const stateReceivedAt = useRef(Date.now())
   const driftBurstInterval = useRef<ReturnType<typeof setInterval> | null>(null)
   const setRemoteLock = useCallback((duration: number) => {
     isRemoteUpdate.current = true
@@ -48,7 +49,7 @@ export default function VideoPlayer({ videoState, heartbeat, onPlay, onPause, on
       try {
         const vs = videoStateRef.current
         if (!vs.isPlaying) return
-        const elapsed = (Date.now() - vs.timestamp) / 1000
+        const elapsed = (Date.now() - stateReceivedAt.current) / 1000
         const expectedTime = vs.currentTime + elapsed
         const currentTime = player.getCurrentTime()
         const diff = Math.abs(currentTime - expectedTime)
@@ -68,13 +69,13 @@ export default function VideoPlayer({ videoState, heartbeat, onPlay, onPause, on
     if (!player) return
     if (videoState.seq <= lastProcessedSeq.current) return
     lastProcessedSeq.current = videoState.seq
+    stateReceivedAt.current = Date.now()
 
     setRemoteLock(200)
 
-    const elapsed = (Date.now() - videoState.timestamp) / 1000
-    const targetTime = videoState.isPlaying
-      ? videoState.currentTime + elapsed
-      : videoState.currentTime
+    // Server already computed the expected position at send time —
+    // use directly, no cross-clock math needed.
+    const targetTime = videoState.currentTime
 
     try {
       const currentTime = player.getCurrentTime()
@@ -116,10 +117,8 @@ export default function VideoPlayer({ videoState, heartbeat, onPlay, onPause, on
     if (!player) return
 
     try {
-      const elapsed = (Date.now() - heartbeat.timestamp) / 1000
-      const expectedTime = heartbeat.isPlaying
-        ? heartbeat.currentTime + elapsed
-        : heartbeat.currentTime
+      // Server computed position at send time — use directly
+      const expectedTime = heartbeat.currentTime
 
       // Fix play/pause mismatch
       const playerState = player.getPlayerState()

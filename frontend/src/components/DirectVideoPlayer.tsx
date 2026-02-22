@@ -22,6 +22,7 @@ export default function DirectVideoPlayer({ videoState, heartbeat, onPlay, onPau
   const lastSeekTime = useRef(0)
   const videoStateRef = useRef(videoState)
   videoStateRef.current = videoState
+  const stateReceivedAt = useRef(Date.now())
   const driftBurstInterval = useRef<ReturnType<typeof setInterval> | null>(null)
   const isHlsUrl = /\.m3u8(\?.*)?$/i.test(videoState.videoUrl)
 
@@ -107,7 +108,7 @@ export default function DirectVideoPlayer({ videoState, heartbeat, onPlay, onPau
       if (!video || isRemoteUpdate.current) return
       const vs = videoStateRef.current
       if (!vs.isPlaying) return
-      const elapsed = (Date.now() - vs.timestamp) / 1000
+      const elapsed = (Date.now() - stateReceivedAt.current) / 1000
       const expectedTime = vs.currentTime + elapsed
       const diff = Math.abs(video.currentTime - expectedTime)
       if (diff > 1) {
@@ -123,13 +124,13 @@ export default function DirectVideoPlayer({ videoState, heartbeat, onPlay, onPau
     if (!video) return
     if (videoState.seq <= lastProcessedSeq.current) return
     lastProcessedSeq.current = videoState.seq
+    stateReceivedAt.current = Date.now()
 
     setRemoteLock(200)
 
-    const elapsed = (Date.now() - videoState.timestamp) / 1000
-    const targetTime = videoState.isPlaying
-      ? videoState.currentTime + elapsed
-      : videoState.currentTime
+    // Server already computed the expected position at send time —
+    // use directly, no cross-clock math needed.
+    const targetTime = videoState.currentTime
 
     const diff = Math.abs(video.currentTime - targetTime)
     if (diff > 1) {
@@ -163,10 +164,8 @@ export default function DirectVideoPlayer({ videoState, heartbeat, onPlay, onPau
     const video = videoRef.current
     if (!video) return
 
-    const elapsed = (Date.now() - heartbeat.timestamp) / 1000
-    const expectedTime = heartbeat.isPlaying
-      ? heartbeat.currentTime + elapsed
-      : heartbeat.currentTime
+    // Server computed position at send time — use directly
+    const expectedTime = heartbeat.currentTime
 
     // Fix play/pause mismatch
     if (heartbeat.isPlaying && video.paused) {
