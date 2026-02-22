@@ -261,7 +261,9 @@ io.on('connection', (socket) => {
     room.lastSyncTime = Date.now();
     room.seq++;
 
-    socket.to(room.id).emit('video:state-update', getVideoState(room));
+    // Send to ALL including sender so their local state stays fresh
+    // (prevents drift correction from fighting the user's own actions)
+    io.to(room.id).emit('video:state-update', getVideoState(room));
   });
 
   socket.on('video:pause', (data) => {
@@ -273,7 +275,7 @@ io.on('connection', (socket) => {
     room.lastSyncTime = Date.now();
     room.seq++;
 
-    socket.to(room.id).emit('video:state-update', getVideoState(room));
+    io.to(room.id).emit('video:state-update', getVideoState(room));
   });
 
   socket.on('video:seek', (data) => {
@@ -284,7 +286,7 @@ io.on('connection', (socket) => {
     room.lastSyncTime = Date.now();
     room.seq++;
 
-    socket.to(room.id).emit('video:state-update', getVideoState(room));
+    io.to(room.id).emit('video:state-update', getVideoState(room));
   });
 
   socket.on('video:rate', (data) => {
@@ -293,7 +295,7 @@ io.on('connection', (socket) => {
 
     room.playbackRate = data.rate;
     room.seq++;
-    socket.to(room.id).emit('video:state-update', getVideoState(room));
+    io.to(room.id).emit('video:state-update', getVideoState(room));
   });
 
   // Periodic sync: clients request current authoritative state
