@@ -232,7 +232,7 @@ export default function VideoPlayer({ videoState, heartbeat, onPlay, onPause, on
           width: '100%',
           height: '100%',
           playerVars: {
-            autoplay: 1,
+            autoplay: 0,
             controls: 1,
             modestbranding: 1,
             rel: 0,
