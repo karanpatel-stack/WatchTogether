@@ -30,13 +30,14 @@ export default function VideoPlayer({ videoState, onPlay, onPause, onSeek, onEnd
     }, duration)
   }, [])
 
-  // Burst drift correction: runs every 1s for 6s after a sync event
+  // Burst drift correction: checks every 500ms for 3s after a sync event
   const startDriftBurst = useCallback(() => {
-    if (driftBurstInterval.current) clearInterval(driftBurstInterval.current)
+    // Don't restart if already running — ref ensures latest state is used
+    if (driftBurstInterval.current) return
     let count = 0
     driftBurstInterval.current = setInterval(() => {
       count++
-      if (count >= 6) {
+      if (count > 6) {
         if (driftBurstInterval.current) clearInterval(driftBurstInterval.current)
         driftBurstInterval.current = null
         return
@@ -51,14 +52,14 @@ export default function VideoPlayer({ videoState, onPlay, onPause, onSeek, onEnd
         const currentTime = player.getCurrentTime()
         const diff = Math.abs(currentTime - expectedTime)
         if (diff > 1) {
-          setRemoteLock(200)
+          setRemoteLock(500)
           player.seekTo(expectedTime, true)
           seekDetectorLastTime.current = expectedTime
         }
       } catch {
         // Player not ready
       }
-    }, 1000)
+    }, 500)
   }, [setRemoteLock])
 
   const syncPlayer = useCallback(() => {
@@ -79,6 +80,8 @@ export default function VideoPlayer({ videoState, onPlay, onPause, onSeek, onEnd
       const diff = Math.abs(currentTime - targetTime)
 
       if (diff > 1) {
+        // Longer lock for seeks to cover YouTube buffering/state changes
+        setRemoteLock(800)
         player.seekTo(targetTime, true)
         seekDetectorLastTime.current = targetTime
       }

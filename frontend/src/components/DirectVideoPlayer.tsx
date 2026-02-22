@@ -90,13 +90,14 @@ export default function DirectVideoPlayer({ videoState, onPlay, onPause, onSeek,
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [videoState.videoUrl])
 
-  // Burst drift correction: runs every 1s for 6s after a sync event
+  // Burst drift correction: checks every 500ms for 3s after a sync event
   const startDriftBurst = useCallback(() => {
-    if (driftBurstInterval.current) clearInterval(driftBurstInterval.current)
+    // Don't restart if already running — ref ensures latest state is used
+    if (driftBurstInterval.current) return
     let count = 0
     driftBurstInterval.current = setInterval(() => {
       count++
-      if (count >= 6) {
+      if (count > 6) {
         if (driftBurstInterval.current) clearInterval(driftBurstInterval.current)
         driftBurstInterval.current = null
         return
@@ -109,11 +110,11 @@ export default function DirectVideoPlayer({ videoState, onPlay, onPause, onSeek,
       const expectedTime = vs.currentTime + elapsed
       const diff = Math.abs(video.currentTime - expectedTime)
       if (diff > 1) {
-        setRemoteLock(200)
+        setRemoteLock(500)
         video.currentTime = expectedTime
         lastSeekTime.current = expectedTime
       }
-    }, 1000)
+    }, 500)
   }, [setRemoteLock])
 
   const syncPlayer = useCallback(() => {
@@ -131,6 +132,8 @@ export default function DirectVideoPlayer({ videoState, onPlay, onPause, onSeek,
 
     const diff = Math.abs(video.currentTime - targetTime)
     if (diff > 1) {
+      // Longer lock for seeks to cover buffering/state changes
+      setRemoteLock(800)
       video.currentTime = targetTime
       lastSeekTime.current = targetTime
     }
