@@ -256,6 +256,11 @@ io.on('connection', (socket) => {
   socket.on('video:play', () => {
     const room = getUserRoom(socket.id);
     if (!room) return;
+    // Ignore echo: remote client's player finished buffering and fired
+    // a play event after the remote lock expired. Resetting lastSyncTime
+    // here would tell everyone "you should be at currentTime NOW" even
+    // though playback started seconds ago — causing 3-4s rollback.
+    if (room.isPlaying) return;
 
     // Don't update currentTime — keep the value from the last pause/seek.
     // YouTube's getCurrentTime() can report a stale keyframe position at
@@ -272,6 +277,8 @@ io.on('connection', (socket) => {
   socket.on('video:pause', (data) => {
     const room = getUserRoom(socket.id);
     if (!room) return;
+    // Ignore echo: same as video:play — prevents resetting sync reference
+    if (!room.isPlaying) return;
 
     room.isPlaying = false;
     room.currentTime = data.currentTime;
