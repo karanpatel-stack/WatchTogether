@@ -14,7 +14,7 @@ import VideoUrlInput from '../components/VideoUrlInput'
 import QueuePanel from '../components/QueuePanel'
 import CommentsPanel from '../components/CommentsPanel'
 import SettingsPanel from '../components/SettingsPanel'
-import VoiceControls from '../components/VoiceControls'
+// VoiceControls now integrated into RoomHeader
 import AmbientBackground from '../components/AmbientBackground'
 import { VoiceProvider, useVoice } from '../lib/VoiceContext'
 import { ScreenShareProvider, useScreenShare } from '../lib/ScreenShareContext'
@@ -567,8 +567,6 @@ function RoomContent() {
                 )}
               </>
             )}
-            {/* Voice Controls Overlay */}
-            <VoiceControls />
             {/* Screen Share Controls */}
             <ScreenShareControls rightOffset={livingRoomMode && lobbyOpen ? 320 : 0} />
           </div>

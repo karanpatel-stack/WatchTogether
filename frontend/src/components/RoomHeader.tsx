@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { Tv, Copy, Check, LogOut, Crown, Users, Mic, MicOff, Film, Phone, Monitor } from 'lucide-react'
+import { Tv, Copy, Check, LogOut, Crown, Users, Mic, MicOff, Film, Phone, PhoneOff, Monitor } from 'lucide-react'
 import { useVoice } from '../lib/VoiceContext'
 import { useScreenShare } from '../lib/ScreenShareContext'
+import MicLevelMeter from './MicLevelMeter'
 
 interface Props {
   roomId: string
@@ -15,7 +16,7 @@ interface Props {
 
 export default function RoomHeader({ roomId, isHost, userCount, onLeave, livingRoomMode, onToggleLivingRoom, dimLevel }: Props) {
   const [copied, setCopied] = useState(false)
-  const { isMuted, isInVoice, toggleMute, joinVoice, voiceSettings } = useVoice()
+  const { isMuted, isInVoice, toggleMute, joinVoice, leaveVoice, speakingUsers, voiceSettings } = useVoice()
   const { isSharing, isViewing, startSharing, stopSharing } = useScreenShare()
 
   const copyRoomCode = () => {
@@ -67,7 +68,45 @@ export default function RoomHeader({ roomId, isHost, userCount, onLeave, livingR
           </div>
         )}
 
-        {!isInVoice && (
+        {isInVoice ? (
+          <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white/[0.04] border border-white/[0.08]">
+            <button
+              onClick={toggleMute}
+              disabled={voiceSettings.pushToTalk}
+              className={`flex items-center justify-center w-7 h-7 rounded-md transition-all ${
+                isMuted
+                  ? 'bg-red-500/15 text-red-400 hover:bg-red-500/25'
+                  : 'bg-green-500/15 text-green-400 hover:bg-green-500/25'
+              } ${voiceSettings.pushToTalk ? 'opacity-50 cursor-not-allowed' : ''}`}
+              title={voiceSettings.pushToTalk ? 'Push to Talk enabled' : isMuted ? 'Unmute' : 'Mute'}
+            >
+              {isMuted ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
+            </button>
+
+            <MicLevelMeter variant="dots" />
+
+            {speakingUsers.size > 0 && (
+              <div className="hidden sm:flex items-center gap-1 px-1">
+                <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse shadow-[0_0_4px_rgba(74,222,128,0.6)]" />
+                <span className="text-[10px] text-green-400/80 font-medium">{speakingUsers.size}</span>
+              </div>
+            )}
+
+            {voiceSettings.pushToTalk && (
+              <span className="hidden sm:inline text-[9px] text-white/25 font-medium">
+                PTT: {voiceSettings.pushToTalkKey === ' ' ? 'Space' : voiceSettings.pushToTalkKey.toUpperCase()}
+              </span>
+            )}
+
+            <button
+              onClick={leaveVoice}
+              className="flex items-center justify-center w-7 h-7 rounded-md bg-white/[0.04] text-white/30 hover:text-red-400 hover:bg-red-500/10 transition-all"
+              title="Disconnect from voice"
+            >
+              <PhoneOff className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        ) : (
           <button
             onClick={joinVoice}
             className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-accent-500/15 border border-accent-500/25 text-[var(--accent-text)] hover:bg-accent-500/25 hover:border-accent-500/35 transition-all text-xs font-medium"
@@ -122,21 +161,6 @@ export default function RoomHeader({ roomId, isHost, userCount, onLeave, livingR
           <Users className="w-3.5 h-3.5" />
           <span className="text-xs font-medium">{userCount}</span>
         </div>
-
-        {isInVoice && (
-          <button
-            onClick={toggleMute}
-            disabled={voiceSettings.pushToTalk}
-            className={`flex items-center justify-center w-8 h-8 rounded-lg border transition-all ${
-              isMuted
-                ? 'bg-red-500/10 border-red-500/20 text-red-400 hover:bg-red-500/20'
-                : 'bg-green-500/10 border-green-500/20 text-green-400 hover:bg-green-500/20'
-            } ${voiceSettings.pushToTalk ? 'opacity-50 cursor-not-allowed' : ''}`}
-            title={voiceSettings.pushToTalk ? 'Push to Talk enabled' : isMuted ? 'Unmute' : 'Mute'}
-          >
-            {isMuted ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
-          </button>
-        )}
 
         <button
           onClick={onLeave}
