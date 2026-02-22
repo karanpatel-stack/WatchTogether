@@ -20,10 +20,6 @@ export default function DirectVideoPlayer({ videoState, heartbeat, onPlay, onPau
   const playDebounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pauseDebounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastSeekTime = useRef(0)
-  const videoStateRef = useRef(videoState)
-  videoStateRef.current = videoState
-  const stateReceivedAt = useRef(Date.now())
-  const driftBurstInterval = useRef<ReturnType<typeof setInterval> | null>(null)
   const isHlsUrl = /\.m3u8(\?.*)?$/i.test(videoState.videoUrl)
 
   const setRemoteLock = useCallback((duration: number) => {
@@ -92,39 +88,11 @@ export default function DirectVideoPlayer({ videoState, heartbeat, onPlay, onPau
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [videoState.videoUrl])
 
-  // Burst drift correction: checks every 500ms for 3s after a sync event
-  const startDriftBurst = useCallback(() => {
-    // Don't restart if already running — ref ensures latest state is used
-    if (driftBurstInterval.current) return
-    let count = 0
-    driftBurstInterval.current = setInterval(() => {
-      count++
-      if (count > 6) {
-        if (driftBurstInterval.current) clearInterval(driftBurstInterval.current)
-        driftBurstInterval.current = null
-        return
-      }
-      const video = videoRef.current
-      if (!video || isRemoteUpdate.current) return
-      const vs = videoStateRef.current
-      if (!vs.isPlaying) return
-      const elapsed = (Date.now() - stateReceivedAt.current) / 1000
-      const expectedTime = vs.currentTime + elapsed
-      const diff = Math.abs(video.currentTime - expectedTime)
-      if (diff > 1) {
-        setRemoteLock(500)
-        video.currentTime = expectedTime
-        lastSeekTime.current = expectedTime
-      }
-    }, 500)
-  }, [setRemoteLock])
-
   const syncPlayer = useCallback(() => {
     const video = videoRef.current
     if (!video) return
     if (videoState.seq <= lastProcessedSeq.current) return
     lastProcessedSeq.current = videoState.seq
-    stateReceivedAt.current = Date.now()
 
     setRemoteLock(200)
 
@@ -149,10 +117,7 @@ export default function DirectVideoPlayer({ videoState, heartbeat, onPlay, onPau
     if (video.playbackRate !== videoState.playbackRate) {
       video.playbackRate = videoState.playbackRate
     }
-
-    // Start burst drift correction for the next 6 seconds
-    startDriftBurst()
-  }, [videoState, setRemoteLock, startDriftBurst])
+  }, [videoState, setRemoteLock])
 
   useEffect(() => {
     syncPlayer()
@@ -209,7 +174,6 @@ export default function DirectVideoPlayer({ videoState, heartbeat, onPlay, onPau
       if (playDebounceTimer.current) clearTimeout(playDebounceTimer.current)
       if (pauseDebounceTimer.current) clearTimeout(pauseDebounceTimer.current)
       if (remoteUpdateTimer.current) clearTimeout(remoteUpdateTimer.current)
-      if (driftBurstInterval.current) clearInterval(driftBurstInterval.current)
     }
   }, [])
 
