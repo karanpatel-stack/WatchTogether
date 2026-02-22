@@ -113,5 +113,6 @@ export interface ServerToClientEvents {
   'screen:answer': (data: { from: string; answer: RTCSessionDescriptionInit }) => void;
   'screen:ice-candidate': (data: { from: string; candidate: RTCIceCandidateInit }) => void;
   'screen:viewer-joined': (data: { viewerId: string }) => void;
+  'video:heartbeat': (data: VideoState) => void;
   'error': (data: { message: string }) => void;
 }

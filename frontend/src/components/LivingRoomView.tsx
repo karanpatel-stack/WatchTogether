@@ -24,6 +24,7 @@ const COUCH_ARM = 14    // armrest width
 interface Props {
   users: User[]
   videoState: VideoState
+  heartbeat: VideoState | null
   isSharing: boolean
   isViewing: boolean
   localStream: MediaStream | null
@@ -75,7 +76,7 @@ function Avatar({ user, color }: { user: User | null; color: string }) {
 
 
 export default function LivingRoomView({
-  users, videoState, isSharing, isViewing, localStream, remoteStream,
+  users, videoState, heartbeat, isSharing, isViewing, localStream, remoteStream,
   onPlay, onPause, onSeek, onEnd, onToggleUrlInput, onToggleLobby, dimLevel,
 }: Props) {
   const previewRef = useRef<HTMLVideoElement>(null)
@@ -113,10 +114,10 @@ export default function LivingRoomView({
       </div>
     )
     if (videoState.videoType === 'direct' && videoState.videoUrl) {
-      return <DirectVideoPlayer videoState={videoState} onPlay={onPlay} onPause={onPause} onSeek={onSeek} onEnd={onEnd} />
+      return <DirectVideoPlayer videoState={videoState} heartbeat={heartbeat} onPlay={onPlay} onPause={onPause} onSeek={onSeek} onEnd={onEnd} />
     }
     if (videoState.videoId) {
-      return <VideoPlayer videoState={videoState} onPlay={onPlay} onPause={onPause} onSeek={onSeek} onEnd={onEnd} />
+      return <VideoPlayer videoState={videoState} heartbeat={heartbeat} onPlay={onPlay} onPause={onPause} onSeek={onSeek} onEnd={onEnd} />
     }
     return (
       <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#000' }}>

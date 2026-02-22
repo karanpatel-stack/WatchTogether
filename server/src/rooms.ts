@@ -206,6 +206,10 @@ export function extractVideoId(url: string): string | null {
   return null;
 }
 
+export function getAllRooms(): Map<string, Room> {
+  return rooms;
+}
+
 export function getRoomCount(): number {
   return rooms.size;
 }

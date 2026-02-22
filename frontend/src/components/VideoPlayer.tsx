@@ -4,13 +4,14 @@ import type { VideoState } from '../lib/types'
 
 interface Props {
   videoState: VideoState
+  heartbeat: VideoState | null
   onPlay: () => void
   onPause: (currentTime: number) => void
   onSeek: (currentTime: number) => void
   onEnd?: () => void
 }
 
-export default function VideoPlayer({ videoState, onPlay, onPause, onSeek, onEnd }: Props) {
+export default function VideoPlayer({ videoState, heartbeat, onPlay, onPause, onSeek, onEnd }: Props) {
   const playerRef = useRef<YouTubePlayer | null>(null)
   const isRemoteUpdate = useRef(false)
   const remoteUpdateTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -64,7 +65,7 @@ export default function VideoPlayer({ videoState, onPlay, onPause, onSeek, onEnd
 
   const syncPlayer = useCallback(() => {
     const player = playerRef.current
-    if (!player || isRemoteUpdate.current) return
+    if (!player) return
     if (videoState.seq <= lastProcessedSeq.current) return
     lastProcessedSeq.current = videoState.seq
 
@@ -107,6 +108,59 @@ export default function VideoPlayer({ videoState, onPlay, onPause, onSeek, onEnd
   useEffect(() => {
     syncPlayer()
   }, [syncPlayer])
+
+  // Heartbeat correction: safety net for missed sync events (2s threshold)
+  useEffect(() => {
+    if (!heartbeat) return
+    const player = playerRef.current
+    if (!player) return
+
+    try {
+      const elapsed = (Date.now() - heartbeat.timestamp) / 1000
+      const expectedTime = heartbeat.isPlaying
+        ? heartbeat.currentTime + elapsed
+        : heartbeat.currentTime
+
+      // Fix play/pause mismatch
+      const playerState = player.getPlayerState()
+      if (heartbeat.isPlaying && playerState !== 1) {
+        setRemoteLock(200)
+        player.playVideo()
+      } else if (!heartbeat.isPlaying && playerState === 1) {
+        setRemoteLock(200)
+        player.pauseVideo()
+      }
+
+      // Fix time drift > 2s
+      if (heartbeat.isPlaying) {
+        const currentTime = player.getCurrentTime()
+        const diff = Math.abs(currentTime - expectedTime)
+        if (diff > 2) {
+          setRemoteLock(500)
+          player.seekTo(expectedTime, true)
+          seekDetectorLastTime.current = expectedTime
+        }
+      }
+
+      // Fix playback rate mismatch
+      if (player.getPlaybackRate() !== heartbeat.playbackRate) {
+        player.setPlaybackRate(heartbeat.playbackRate)
+      }
+    } catch {
+      // Player not ready
+    }
+  }, [heartbeat, setRemoteLock])
+
+  // Visibility change: reset seq so next update is always processed
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        lastProcessedSeq.current = 0
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
+  }, [])
 
   // Clean up timers on unmount
   useEffect(() => {

@@ -10,6 +10,7 @@ import {
   getUserRoom,
   getRoomUsers,
   getVideoState,
+  getAllRooms,
   addMessage,
   deleteMessage,
   extractVideoId,
@@ -612,6 +613,16 @@ io.on('connection', (socket) => {
     handleDisconnect();
   });
 });
+
+// Heartbeat: send current video state every 3s to rooms with 2+ users and playing video.
+// Does NOT increment seq — read-only, acts as a safety net for missed events.
+setInterval(() => {
+  for (const [, room] of getAllRooms()) {
+    if (room.users.size < 2 || !room.isPlaying) continue;
+    if (!room.videoId && !room.videoUrl) continue;
+    io.to(room.id).emit('video:heartbeat', getVideoState(room));
+  }
+}, 3000);
 
 const PORT = parseInt(process.env.PORT || '3001', 10);
 server.listen(PORT, '0.0.0.0', () => {

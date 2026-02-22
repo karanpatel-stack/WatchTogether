@@ -4,13 +4,14 @@ import type { VideoState } from '../lib/types'
 
 interface Props {
   videoState: VideoState
+  heartbeat: VideoState | null
   onPlay: () => void
   onPause: (currentTime: number) => void
   onSeek: (currentTime: number) => void
   onEnd?: () => void
 }
 
-export default function DirectVideoPlayer({ videoState, onPlay, onPause, onSeek, onEnd }: Props) {
+export default function DirectVideoPlayer({ videoState, heartbeat, onPlay, onPause, onSeek, onEnd }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const hlsRef = useRef<Hls | null>(null)
   const isRemoteUpdate = useRef(false)
@@ -119,7 +120,7 @@ export default function DirectVideoPlayer({ videoState, onPlay, onPause, onSeek,
 
   const syncPlayer = useCallback(() => {
     const video = videoRef.current
-    if (!video || isRemoteUpdate.current) return
+    if (!video) return
     if (videoState.seq <= lastProcessedSeq.current) return
     lastProcessedSeq.current = videoState.seq
 
@@ -155,6 +156,53 @@ export default function DirectVideoPlayer({ videoState, onPlay, onPause, onSeek,
   useEffect(() => {
     syncPlayer()
   }, [syncPlayer])
+
+  // Heartbeat correction: safety net for missed sync events (2s threshold)
+  useEffect(() => {
+    if (!heartbeat) return
+    const video = videoRef.current
+    if (!video) return
+
+    const elapsed = (Date.now() - heartbeat.timestamp) / 1000
+    const expectedTime = heartbeat.isPlaying
+      ? heartbeat.currentTime + elapsed
+      : heartbeat.currentTime
+
+    // Fix play/pause mismatch
+    if (heartbeat.isPlaying && video.paused) {
+      setRemoteLock(200)
+      video.play().catch(() => {})
+    } else if (!heartbeat.isPlaying && !video.paused) {
+      setRemoteLock(200)
+      video.pause()
+    }
+
+    // Fix time drift > 2s
+    if (heartbeat.isPlaying) {
+      const diff = Math.abs(video.currentTime - expectedTime)
+      if (diff > 2) {
+        setRemoteLock(500)
+        video.currentTime = expectedTime
+        lastSeekTime.current = expectedTime
+      }
+    }
+
+    // Fix playback rate mismatch
+    if (video.playbackRate !== heartbeat.playbackRate) {
+      video.playbackRate = heartbeat.playbackRate
+    }
+  }, [heartbeat, setRemoteLock])
+
+  // Visibility change: reset seq so next update is always processed
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        lastProcessedSeq.current = 0
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
+  }, [])
 
   // Clean up timers on unmount
   useEffect(() => {

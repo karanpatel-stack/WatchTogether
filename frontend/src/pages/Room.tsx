@@ -58,6 +58,7 @@ function RoomContent() {
   const [lobbyOpen, setLobbyOpen] = useState(false)
   const [dimLevel, setDimLevel] = useState(0)
   const [queue, setQueue] = useState<QueueItem[]>([])
+  const [heartbeatState, setHeartbeatState] = useState<VideoState | null>(null)
 
   const myUserId = useRef(localStorage.getItem('wp_userId') || '')
   const connectedRef = useRef(false)
@@ -199,6 +200,10 @@ function RoomContent() {
       setQueue(newQueue)
     })
 
+    socket.on('video:heartbeat', (state: VideoState) => {
+      setHeartbeatState(state)
+    })
+
     socket.on('chat:message', (message) => {
       setMessages((prev) => [...prev, message])
       setUnreadCount((c) => c + 1)
@@ -222,6 +227,7 @@ function RoomContent() {
       socket.off('room:host-changed')
       socket.off('video:state-update')
       socket.off('video:load')
+      socket.off('video:heartbeat')
       socket.off('queue:update')
       socket.off('chat:message')
       socket.off('chat:delete')
@@ -429,6 +435,7 @@ function RoomContent() {
                 <LivingRoomView
                   users={users}
                   videoState={videoState}
+                  heartbeat={heartbeatState}
                   isSharing={isSharing}
                   isViewing={isViewing}
                   localStream={localStream}
@@ -529,6 +536,7 @@ function RoomContent() {
                 ) : videoState.videoType === 'direct' && videoState.videoUrl ? (
                   <DirectVideoPlayer
                     videoState={videoState}
+                    heartbeat={heartbeatState}
                     onPlay={handlePlay}
                     onPause={handlePause}
                     onSeek={handleSeek}
@@ -537,6 +545,7 @@ function RoomContent() {
                 ) : videoState.videoId ? (
                   <VideoPlayer
                     videoState={videoState}
+                    heartbeat={heartbeatState}
                     onPlay={handlePlay}
                     onPause={handlePause}
                     onSeek={handleSeek}
