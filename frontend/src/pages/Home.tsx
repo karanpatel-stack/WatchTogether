@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { socket } from '../lib/socket'
-import { Play, Users, Tv } from 'lucide-react'
+import { Play, Users, Tv, UserPlus } from 'lucide-react'
 
 export default function Home() {
   const [userName, setUserName] = useState('')
@@ -117,6 +117,13 @@ export default function Home() {
                 Create Room
               </>
             )}
+          </button>
+
+          <button
+            className="w-full mt-3 bg-accent-600/10 hover:bg-accent-600/20 border border-accent-500/20 hover:border-accent-500/35 text-accent-400 font-semibold py-3.5 rounded-xl transition-all duration-200 shadow-lg shadow-accent-900/10 hover:shadow-accent-800/20 hover:scale-[1.01] active:scale-[0.99] flex items-center justify-center gap-2"
+          >
+            <UserPlus className="w-4 h-4" />
+            Create Account
           </button>
         </div>
 

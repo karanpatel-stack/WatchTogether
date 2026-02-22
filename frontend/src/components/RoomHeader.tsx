@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { Tv, Copy, Check, LogOut, Crown, Users, Mic, MicOff, Film } from 'lucide-react'
+import { Tv, Copy, Check, LogOut, Crown, Users, Mic, MicOff, Film, Phone, Monitor } from 'lucide-react'
 import { useVoice } from '../lib/VoiceContext'
+import { useScreenShare } from '../lib/ScreenShareContext'
 
 interface Props {
   roomId: string
@@ -14,7 +15,8 @@ interface Props {
 
 export default function RoomHeader({ roomId, isHost, userCount, onLeave, livingRoomMode, onToggleLivingRoom, dimLevel }: Props) {
   const [copied, setCopied] = useState(false)
-  const { isMuted, isInVoice, toggleMute, voiceSettings } = useVoice()
+  const { isMuted, isInVoice, toggleMute, joinVoice, voiceSettings } = useVoice()
+  const { isSharing, isViewing, startSharing, stopSharing } = useScreenShare()
 
   const copyRoomCode = () => {
     navigator.clipboard.writeText(roomId)
@@ -63,6 +65,42 @@ export default function RoomHeader({ roomId, isHost, userCount, onLeave, livingR
             <Crown className="w-3 h-3 text-amber-400" />
             <span className="text-[10px] font-semibold text-amber-400 uppercase tracking-wider">Host</span>
           </div>
+        )}
+
+        {!isInVoice && (
+          <button
+            onClick={joinVoice}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-accent-500/15 border border-accent-500/25 text-[var(--accent-text)] hover:bg-accent-500/25 hover:border-accent-500/35 transition-all text-xs font-medium"
+            title="Join voice chat"
+          >
+            <Phone className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Join Voice</span>
+          </button>
+        )}
+
+        {isSharing ? (
+          <button
+            onClick={stopSharing}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-red-500/15 border border-red-500/25 text-red-400 hover:bg-red-500/25 transition-all text-xs font-medium"
+            title="Stop sharing your screen"
+          >
+            <Monitor className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Stop Sharing</span>
+          </button>
+        ) : isViewing ? (
+          <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-accent-500/15 border border-accent-500/25 text-[var(--accent-text)] text-xs font-medium">
+            <Monitor className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Screen Share Active</span>
+          </div>
+        ) : (
+          <button
+            onClick={startSharing}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/[0.04] border border-white/[0.06] text-white/40 hover:text-white/60 hover:bg-white/[0.06] hover:border-white/[0.1] transition-all text-xs font-medium"
+            title="Share your screen"
+          >
+            <Monitor className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Share Screen</span>
+          </button>
         )}
       </div>
 
