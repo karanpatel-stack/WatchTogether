@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useTheme } from '../lib/ThemeContext'
 import { useVoice } from '../lib/VoiceContext'
 import MicLevelMeter from './MicLevelMeter'
+import { AUDIO_QUALITY_PRESETS, type AudioQualityPreset } from '../lib/VoiceManager'
 import { Palette, SlidersHorizontal, Mic, Volume2, Keyboard } from 'lucide-react'
 
 export default function SettingsPanel() {
@@ -96,6 +97,34 @@ export default function SettingsPanel() {
             />
           </div>
 
+          {/* Voice Quality */}
+          <div>
+            <label className="text-[11px] text-white/30 font-medium mb-1.5 block">Voice Quality</label>
+            <div className="grid grid-cols-4 gap-1.5">
+              {(Object.keys(AUDIO_QUALITY_PRESETS) as AudioQualityPreset[]).map((key) => {
+                const preset = AUDIO_QUALITY_PRESETS[key]
+                const isActive = voiceSettings.audioQuality === key
+                return (
+                  <button
+                    key={key}
+                    onClick={() => setVoiceSettings({ audioQuality: key })}
+                    className={`px-2 py-1.5 rounded-lg border text-[11px] font-medium transition-all ${
+                      isActive
+                        ? 'bg-accent-500/15 border-accent-500/30 text-accent-400'
+                        : 'bg-white/[0.04] border-white/[0.08] text-white/40 hover:bg-white/[0.06] hover:border-white/[0.1]'
+                    }`}
+                  >
+                    {preset.label}
+                  </button>
+                )
+              })}
+            </div>
+            <p className="text-[9px] text-white/15 mt-1">
+              {AUDIO_QUALITY_PRESETS[voiceSettings.audioQuality].bitrate / 1000}kbps
+              {voiceSettings.audioQuality === 'ultra' ? ' stereo' : ' mono'}
+            </p>
+          </div>
+
           {/* Noise Suppression */}
           <div className="flex items-center justify-between">
             <label className="text-[11px] text-white/30 font-medium">Noise Suppression</label>
@@ -108,6 +137,26 @@ export default function SettingsPanel() {
               <span
                 className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${
                   voiceSettings.noiseSuppression ? 'translate-x-4' : 'translate-x-0.5'
+                }`}
+              />
+            </button>
+          </div>
+
+          {/* AI Noise Suppression */}
+          <div className="flex items-center justify-between">
+            <div>
+              <label className="text-[11px] text-white/30 font-medium">AI Noise Suppression</label>
+              <p className="text-[9px] text-white/15">ML-powered (like Discord Krisp)</p>
+            </div>
+            <button
+              onClick={() => setVoiceSettings({ advancedNoiseSuppression: !voiceSettings.advancedNoiseSuppression })}
+              className={`relative w-9 h-5 rounded-full transition-colors flex-shrink-0 ${
+                voiceSettings.advancedNoiseSuppression ? 'bg-accent-500' : 'bg-white/[0.1]'
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${
+                  voiceSettings.advancedNoiseSuppression ? 'translate-x-4' : 'translate-x-0.5'
                 }`}
               />
             </button>

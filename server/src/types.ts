@@ -64,6 +64,7 @@ export interface ClientToServerEvents {
   'video:seek': (data: { currentTime: number }) => void;
   'video:rate': (data: { rate: number }) => void;
   'video:ended': () => void;
+  'video:sync-request': () => void;
   'queue:add': (data: { url: string }, callback: (response: { success: boolean; error?: string }) => void) => void;
   'queue:remove': (data: { itemId: string }) => void;
   'queue:reorder': (data: { itemId: string; newIndex: number }) => void;
@@ -97,7 +98,7 @@ export interface ServerToClientEvents {
   'room:user-left': (data: { userId: string; userName: string }) => void;
   'room:host-changed': (data: { hostId: string }) => void;
   'video:state-update': (data: VideoState) => void;
-  'video:load': (data: { videoId: string; videoUrl: string }) => void;
+  'video:load': (data: VideoState) => void;
   'queue:update': (data: { queue: QueueItem[] }) => void;
   'chat:message': (data: ChatMessage) => void;
   'chat:delete': (data: { messageId: string }) => void;

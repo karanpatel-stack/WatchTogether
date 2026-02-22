@@ -1,5 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react'
 import YouTube, { YouTubeEvent, YouTubePlayer } from 'react-youtube'
+import { socket } from '../lib/socket'
 import type { VideoState } from '../lib/types'
 
 interface Props {
@@ -13,10 +14,23 @@ interface Props {
 export default function VideoPlayer({ videoState, onPlay, onPause, onSeek, onEnd }: Props) {
   const playerRef = useRef<YouTubePlayer | null>(null)
   const isRemoteUpdate = useRef(false)
+  const remoteUpdateTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastProcessedSeq = useRef(0)
   const seekDetectorLastTime = useRef(0)
   const playDebounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pauseDebounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Track the videoState in a ref for the drift correction interval
+  const videoStateRef = useRef(videoState)
+  videoStateRef.current = videoState
+
+  const setRemoteLock = useCallback((duration: number) => {
+    isRemoteUpdate.current = true
+    if (remoteUpdateTimer.current) clearTimeout(remoteUpdateTimer.current)
+    remoteUpdateTimer.current = setTimeout(() => {
+      isRemoteUpdate.current = false
+      remoteUpdateTimer.current = null
+    }, duration)
+  }, [])
 
   const syncPlayer = useCallback(() => {
     const player = playerRef.current
@@ -24,7 +38,7 @@ export default function VideoPlayer({ videoState, onPlay, onPause, onSeek, onEnd
     if (videoState.seq <= lastProcessedSeq.current) return
     lastProcessedSeq.current = videoState.seq
 
-    isRemoteUpdate.current = true
+    setRemoteLock(200)
 
     const elapsed = (Date.now() - videoState.timestamp) / 1000
     const targetTime = videoState.isPlaying
@@ -35,9 +49,8 @@ export default function VideoPlayer({ videoState, onPlay, onPause, onSeek, onEnd
       const currentTime = player.getCurrentTime()
       const diff = Math.abs(currentTime - targetTime)
 
-      if (diff > 1.5) {
+      if (diff > 1) {
         player.seekTo(targetTime, true)
-        // Update SeekDetector so it doesn't detect this sync seek as user-initiated
         seekDetectorLastTime.current = targetTime
       }
 
@@ -54,26 +67,57 @@ export default function VideoPlayer({ videoState, onPlay, onPause, onSeek, onEnd
     } catch {
       // Player not ready yet
     }
-
-    setTimeout(() => {
-      isRemoteUpdate.current = false
-    }, 800)
-  }, [videoState])
+  }, [videoState, setRemoteLock])
 
   useEffect(() => {
     syncPlayer()
   }, [syncPlayer])
 
-  // Clean up debounce timers on unmount
+  // Periodic drift correction: every 5s, check we're still in sync
+  useEffect(() => {
+    const driftInterval = setInterval(() => {
+      const player = playerRef.current
+      if (!player || isRemoteUpdate.current) return
+
+      const vs = videoStateRef.current
+      if (!vs.isPlaying) return
+
+      try {
+        const currentTime = player.getCurrentTime()
+        const elapsed = (Date.now() - vs.timestamp) / 1000
+        const expectedTime = vs.currentTime + elapsed
+        const drift = Math.abs(currentTime - expectedTime)
+
+        if (drift > 2) {
+          // Large drift — request fresh state from server
+          socket.emit('video:sync-request')
+        } else if (drift > 1) {
+          // Moderate drift — correct locally without network round-trip
+          setRemoteLock(200)
+          player.seekTo(expectedTime, true)
+          seekDetectorLastTime.current = expectedTime
+        }
+      } catch {
+        // Player not ready
+      }
+    }, 5000)
+
+    return () => clearInterval(driftInterval)
+  }, [setRemoteLock])
+
+  // Clean up timers on unmount
   useEffect(() => {
     return () => {
       if (playDebounceTimer.current) clearTimeout(playDebounceTimer.current)
       if (pauseDebounceTimer.current) clearTimeout(pauseDebounceTimer.current)
+      if (remoteUpdateTimer.current) clearTimeout(remoteUpdateTimer.current)
     }
   }, [])
 
   const onReady = (event: YouTubeEvent) => {
     playerRef.current = event.target
+    // Reset seq tracking so first sync always applies
+    lastProcessedSeq.current = 0
     syncPlayer()
   }
 
@@ -94,7 +138,7 @@ export default function VideoPlayer({ videoState, onPlay, onPause, onSeek, onEnd
       playDebounceTimer.current = setTimeout(() => {
         onPlay(currentTime)
         playDebounceTimer.current = null
-      }, 150)
+      }, 100)
     }
     // Paused
     else if (state === 2) {
@@ -106,7 +150,7 @@ export default function VideoPlayer({ videoState, onPlay, onPause, onSeek, onEnd
       pauseDebounceTimer.current = setTimeout(() => {
         onPause(currentTime)
         pauseDebounceTimer.current = null
-      }, 150)
+      }, 100)
     }
     // Ended
     else if (state === 0) {
@@ -130,7 +174,7 @@ export default function VideoPlayer({ videoState, onPlay, onPause, onSeek, onEnd
           width: '100%',
           height: '100%',
           playerVars: {
-            autoplay: 0,
+            autoplay: 1,
             controls: 1,
             modestbranding: 1,
             rel: 0,

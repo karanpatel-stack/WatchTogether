@@ -233,13 +233,13 @@ io.on('connection', (socket) => {
       room.videoType = 'direct';
     }
 
-    room.isPlaying = false;
+    room.isPlaying = true;
     room.currentTime = 0;
     room.lastSyncTime = Date.now();
-
-    io.to(room.id).emit('video:load', { videoId: room.videoId, videoUrl: room.videoUrl });
     room.seq++;
-    io.to(room.id).emit('video:state-update', getVideoState(room));
+
+    // Single atomic event: full state in one message
+    io.to(room.id).emit('video:load', getVideoState(room));
 
     const systemMsg = addMessage(room, 'system', '');
     if (systemMsg) {
@@ -296,6 +296,13 @@ io.on('connection', (socket) => {
     socket.to(room.id).emit('video:state-update', getVideoState(room));
   });
 
+  // Periodic sync: clients request current authoritative state
+  socket.on('video:sync-request', () => {
+    const room = getUserRoom(socket.id);
+    if (!room) return;
+    socket.emit('video:state-update', getVideoState(room));
+  });
+
   socket.on('video:ended', () => {
     const room = getUserRoom(socket.id);
     if (!room) return;
@@ -310,13 +317,13 @@ io.on('connection', (socket) => {
     room.videoId = next.videoId;
     room.videoUrl = next.videoUrl;
     room.videoType = next.videoId ? 'youtube' : 'direct';
-    room.isPlaying = false;
+    room.isPlaying = true;
     room.currentTime = 0;
     room.lastSyncTime = Date.now();
-
-    io.to(room.id).emit('video:load', { videoId: next.videoId, videoUrl: next.videoUrl });
     room.seq++;
-    io.to(room.id).emit('video:state-update', getVideoState(room));
+
+    // Single atomic event for next-in-queue
+    io.to(room.id).emit('video:load', getVideoState(room));
     io.to(room.id).emit('queue:update', { queue: room.queue });
 
     const systemMsg = addMessage(room, 'system', '');
@@ -423,13 +430,12 @@ io.on('connection', (socket) => {
     room.videoId = item.videoId;
     room.videoUrl = item.videoUrl;
     room.videoType = item.videoId ? 'youtube' : 'direct';
-    room.isPlaying = false;
+    room.isPlaying = true;
     room.currentTime = 0;
     room.lastSyncTime = Date.now();
     room.seq++;
 
-    io.to(room.id).emit('video:load', { videoId: item.videoId, videoUrl: item.videoUrl });
-    io.to(room.id).emit('video:state-update', getVideoState(room));
+    io.to(room.id).emit('video:load', getVideoState(room));
     io.to(room.id).emit('queue:update', { queue: room.queue });
 
     const systemMsg = addMessage(room, 'system', '');
@@ -453,13 +459,12 @@ io.on('connection', (socket) => {
     room.videoId = next.videoId;
     room.videoUrl = next.videoUrl;
     room.videoType = next.videoId ? 'youtube' : 'direct';
-    room.isPlaying = false;
+    room.isPlaying = true;
     room.currentTime = 0;
     room.lastSyncTime = Date.now();
     room.seq++;
 
-    io.to(room.id).emit('video:load', { videoId: next.videoId, videoUrl: next.videoUrl });
-    io.to(room.id).emit('video:state-update', getVideoState(room));
+    io.to(room.id).emit('video:load', getVideoState(room));
     io.to(room.id).emit('queue:update', { queue: room.queue });
 
     const systemMsg = addMessage(room, 'system', '');

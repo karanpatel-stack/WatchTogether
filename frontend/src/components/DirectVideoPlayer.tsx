@@ -1,5 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react'
 import Hls from 'hls.js'
+import { socket } from '../lib/socket'
 import type { VideoState } from '../lib/types'
 
 interface Props {
@@ -14,12 +15,25 @@ export default function DirectVideoPlayer({ videoState, onPlay, onPause, onSeek,
   const videoRef = useRef<HTMLVideoElement>(null)
   const hlsRef = useRef<Hls | null>(null)
   const isRemoteUpdate = useRef(false)
+  const remoteUpdateTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastProcessedSeq = useRef(0)
   const playDebounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pauseDebounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastSeekTime = useRef(0)
+  // Track videoState in a ref for drift correction
+  const videoStateRef = useRef(videoState)
+  videoStateRef.current = videoState
 
   const isHlsUrl = /\.m3u8(\?.*)?$/i.test(videoState.videoUrl)
+
+  const setRemoteLock = useCallback((duration: number) => {
+    isRemoteUpdate.current = true
+    if (remoteUpdateTimer.current) clearTimeout(remoteUpdateTimer.current)
+    remoteUpdateTimer.current = setTimeout(() => {
+      isRemoteUpdate.current = false
+      remoteUpdateTimer.current = null
+    }, duration)
+  }, [])
 
   // Setup HLS or native source
   useEffect(() => {
@@ -44,6 +58,12 @@ export default function DirectVideoPlayer({ videoState, onPlay, onPause, onSeek,
         hlsRef.current = hls
         hls.loadSource(videoState.videoUrl)
         hls.attachMedia(video)
+        // Auto-play once manifest is parsed
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          if (videoStateRef.current.isPlaying) {
+            video.play().catch(() => {})
+          }
+        })
       } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
         // Safari native HLS
         video.src = videoState.videoUrl
@@ -52,7 +72,17 @@ export default function DirectVideoPlayer({ videoState, onPlay, onPause, onSeek,
       video.src = videoState.videoUrl
     }
 
+    // Auto-play the new source if server says isPlaying
+    const handleCanPlay = () => {
+      if (videoStateRef.current.isPlaying && video.paused) {
+        setRemoteLock(200)
+        video.play().catch(() => {})
+      }
+    }
+    video.addEventListener('canplay', handleCanPlay, { once: true })
+
     return () => {
+      video.removeEventListener('canplay', handleCanPlay)
       if (hlsRef.current) {
         hlsRef.current.destroy()
         hlsRef.current = null
@@ -68,7 +98,7 @@ export default function DirectVideoPlayer({ videoState, onPlay, onPause, onSeek,
     if (videoState.seq <= lastProcessedSeq.current) return
     lastProcessedSeq.current = videoState.seq
 
-    isRemoteUpdate.current = true
+    setRemoteLock(200)
 
     const elapsed = (Date.now() - videoState.timestamp) / 1000
     const targetTime = videoState.isPlaying
@@ -76,7 +106,7 @@ export default function DirectVideoPlayer({ videoState, onPlay, onPause, onSeek,
       : videoState.currentTime
 
     const diff = Math.abs(video.currentTime - targetTime)
-    if (diff > 1.5) {
+    if (diff > 1) {
       video.currentTime = targetTime
       lastSeekTime.current = targetTime
     }
@@ -90,21 +120,45 @@ export default function DirectVideoPlayer({ videoState, onPlay, onPause, onSeek,
     if (video.playbackRate !== videoState.playbackRate) {
       video.playbackRate = videoState.playbackRate
     }
-
-    setTimeout(() => {
-      isRemoteUpdate.current = false
-    }, 800)
-  }, [videoState])
+  }, [videoState, setRemoteLock])
 
   useEffect(() => {
     syncPlayer()
   }, [syncPlayer])
 
-  // Clean up debounce timers on unmount
+  // Periodic drift correction: every 5s, check we're still in sync
+  useEffect(() => {
+    const driftInterval = setInterval(() => {
+      const video = videoRef.current
+      if (!video || isRemoteUpdate.current) return
+
+      const vs = videoStateRef.current
+      if (!vs.isPlaying || video.paused) return
+
+      const elapsed = (Date.now() - vs.timestamp) / 1000
+      const expectedTime = vs.currentTime + elapsed
+      const drift = Math.abs(video.currentTime - expectedTime)
+
+      if (drift > 2) {
+        // Large drift — request fresh state from server
+        socket.emit('video:sync-request')
+      } else if (drift > 1) {
+        // Moderate drift — correct locally
+        setRemoteLock(200)
+        video.currentTime = expectedTime
+        lastSeekTime.current = expectedTime
+      }
+    }, 5000)
+
+    return () => clearInterval(driftInterval)
+  }, [setRemoteLock])
+
+  // Clean up timers on unmount
   useEffect(() => {
     return () => {
       if (playDebounceTimer.current) clearTimeout(playDebounceTimer.current)
       if (pauseDebounceTimer.current) clearTimeout(pauseDebounceTimer.current)
+      if (remoteUpdateTimer.current) clearTimeout(remoteUpdateTimer.current)
     }
   }, [])
 
@@ -121,7 +175,7 @@ export default function DirectVideoPlayer({ videoState, onPlay, onPause, onSeek,
     playDebounceTimer.current = setTimeout(() => {
       onPlay(video.currentTime)
       playDebounceTimer.current = null
-    }, 150)
+    }, 100)
   }
 
   const handlePause = () => {
@@ -137,7 +191,7 @@ export default function DirectVideoPlayer({ videoState, onPlay, onPause, onSeek,
     pauseDebounceTimer.current = setTimeout(() => {
       onPause(video.currentTime)
       pauseDebounceTimer.current = null
-    }, 150)
+    }, 100)
   }
 
   const handleSeeked = () => {

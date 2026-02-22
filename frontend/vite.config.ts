@@ -10,6 +10,9 @@ export default defineConfig({
       globals: { Buffer: true, process: true },
     }),
   ],
+  optimizeDeps: {
+    exclude: ['@sapphi-red/web-noise-suppressor'],
+  },
   server: {
     host: '0.0.0.0',
     port: 5173,

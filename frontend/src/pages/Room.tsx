@@ -181,14 +181,18 @@ function RoomContent() {
       setVideoState(state)
     })
 
-    socket.on('video:load', ({ videoId, videoUrl }) => {
-      setVideoState((prev) => ({
-        ...prev,
-        videoId,
-        videoUrl,
-        isPlaying: false,
-        currentTime: 0,
-      }))
+    // video:load now carries full state (atomic event from server)
+    socket.on('video:load', (data) => {
+      setVideoState({
+        videoId: data.videoId,
+        videoUrl: data.videoUrl,
+        videoType: data.videoType,
+        isPlaying: data.isPlaying,
+        currentTime: data.currentTime,
+        playbackRate: data.playbackRate,
+        timestamp: data.timestamp,
+        seq: data.seq,
+      })
     })
 
     socket.on('queue:update', ({ queue: newQueue }: { queue: QueueItem[] }) => {

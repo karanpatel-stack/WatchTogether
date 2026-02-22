@@ -1,25 +1,109 @@
 import SimplePeer from 'simple-peer'
 import type { Socket } from 'socket.io-client'
 
-function setHighQualityOpus(sdp: string): string {
-  // Find Opus payload type from rtpmap line
+// ——— Quality Presets ———
+
+export type AudioQualityPreset = 'low' | 'medium' | 'high' | 'ultra'
+
+interface AudioQualityConfig {
+  label: string
+  bitrate: number
+  channelCount: number
+  fmtp: Record<string, number>
+  ptime: number
+}
+
+export const AUDIO_QUALITY_PRESETS: Record<AudioQualityPreset, AudioQualityConfig> = {
+  low: {
+    label: 'Low',
+    bitrate: 32_000,
+    channelCount: 1,
+    fmtp: {
+      maxaveragebitrate: 32000,
+      useinbandfec: 1,
+      usedtx: 1,
+      minptime: 20,
+    },
+    ptime: 20,
+  },
+  medium: {
+    label: 'Medium',
+    bitrate: 64_000,
+    channelCount: 1,
+    fmtp: {
+      maxaveragebitrate: 64000,
+      useinbandfec: 1,
+      usedtx: 0,
+      minptime: 10,
+    },
+    ptime: 20,
+  },
+  high: {
+    label: 'High',
+    bitrate: 96_000,
+    channelCount: 1,
+    fmtp: {
+      maxaveragebitrate: 96000,
+      useinbandfec: 1,
+      usedtx: 0,
+      minptime: 10,
+    },
+    ptime: 10,
+  },
+  ultra: {
+    label: 'Ultra',
+    bitrate: 128_000,
+    channelCount: 2,
+    fmtp: {
+      maxaveragebitrate: 128000,
+      useinbandfec: 1,
+      usedtx: 0,
+      stereo: 1,
+      'sprop-stereo': 1,
+      minptime: 10,
+    },
+    ptime: 10,
+  },
+}
+
+function applyOpusSdpTransform(sdp: string, config: AudioQualityConfig): string {
   const opusMatch = sdp.match(/a=rtpmap:(\d+) opus\/48000\/2/)
   if (!opusMatch) return sdp
   const pt = opusMatch[1]
 
-  // Build high-quality fmtp: FEC on, DTX off, high bitrate, low packet time
-  const qualityFmtp = `a=fmtp:${pt} minptime=10;useinbandfec=1;maxaveragebitrate=510000;usedtx=0\r\n`
+  // Build fmtp string from config
+  const fmtpParts = Object.entries(config.fmtp)
+    .map(([k, v]) => `${k}=${v}`)
+    .join(';')
+  const qualityFmtp = `a=fmtp:${pt} ${fmtpParts}\r\n`
 
-  // Replace existing fmtp line if present, otherwise insert after rtpmap
+  // Replace existing fmtp or insert after rtpmap
   const fmtpRegex = new RegExp(`a=fmtp:${pt} [^\r\n]+\r\n`)
   if (fmtpRegex.test(sdp)) {
-    return sdp.replace(fmtpRegex, qualityFmtp)
+    sdp = sdp.replace(fmtpRegex, qualityFmtp)
+  } else {
+    sdp = sdp.replace(
+      new RegExp(`(a=rtpmap:${pt} opus/48000/2\r\n)`),
+      `$1${qualityFmtp}`
+    )
   }
-  return sdp.replace(
-    new RegExp(`(a=rtpmap:${pt} opus/48000/2\r\n)`),
-    `$1${qualityFmtp}`
-  )
+
+  // Set ptime
+  const ptimeRegex = /a=ptime:\d+\r\n/
+  const ptimeLine = `a=ptime:${config.ptime}\r\n`
+  if (ptimeRegex.test(sdp)) {
+    sdp = sdp.replace(ptimeRegex, ptimeLine)
+  } else {
+    sdp = sdp.replace(
+      new RegExp(`(a=rtpmap:${pt} opus/48000/2\r\n)`),
+      `$1${ptimeLine}`
+    )
+  }
+
+  return sdp
 }
+
+// ——— Settings ———
 
 export interface VoiceSettings {
   inputDevice: string
@@ -28,6 +112,8 @@ export interface VoiceSettings {
   pushToTalk: boolean
   pushToTalkKey: string
   noiseSuppression: boolean
+  audioQuality: AudioQualityPreset
+  advancedNoiseSuppression: boolean
 }
 
 export const DEFAULT_VOICE_SETTINGS: VoiceSettings = {
@@ -37,7 +123,11 @@ export const DEFAULT_VOICE_SETTINGS: VoiceSettings = {
   pushToTalk: false,
   pushToTalkKey: ' ',
   noiseSuppression: true,
+  audioQuality: 'high',
+  advancedNoiseSuppression: false,
 }
+
+// ——— Peer Connection ———
 
 interface PeerConnection {
   peer: SimplePeer.Instance
@@ -45,7 +135,14 @@ interface PeerConnection {
   analyser: AnalyserNode
   gainNode: GainNode
   sourceNode: MediaStreamAudioSourceNode | null
+  outputHighPass: BiquadFilterNode | null
+  outputCompressor: DynamicsCompressorNode | null
+  vadBuffer: Float32Array<ArrayBuffer>
+  holdFrames: number
+  wasSpeaking: boolean
 }
+
+// ——— Events ———
 
 export type VoiceEventType =
   | 'speaking-change'
@@ -57,13 +154,30 @@ export type VoiceEventType =
 
 export type VoiceEventHandler = (data?: unknown) => void
 
+// ——— VAD Constants ———
+
+const SPEECH_THRESHOLD = 0.008
+const SILENCE_THRESHOLD = 0.004
+const HOLD_FRAMES = 8 // ~264ms at 30fps
+const NOISE_GATE_FLOOR = 0.005 // comfort noise floor
+
+// ——— Voice Manager ———
+
 export class VoiceManager {
   private socket: Socket
   private peers = new Map<string, PeerConnection>()
   private localStream: MediaStream | null = null
+  private processedStream: MediaStream | null = null
+  private processedStreamDest: MediaStreamAudioDestinationNode | null = null
   private audioContext: AudioContext | null = null
+  private localSourceNode: MediaStreamAudioSourceNode | null = null
   private inputGainNode: GainNode | null = null
+  private highPassFilter: BiquadFilterNode | null = null
+  private lowPassFilter: BiquadFilterNode | null = null
+  private compressorNode: DynamicsCompressorNode | null = null
+  private noiseGateGain: GainNode | null = null
   private analyserNode: AnalyserNode | null = null
+  private rnnoiseNode: AudioWorkletNode | null = null
   private speakingUsers = new Set<string>()
   private vadIntervalId: ReturnType<typeof setInterval> | null = null
   private localVadIntervalId: ReturnType<typeof setInterval> | null = null
@@ -75,6 +189,8 @@ export class VoiceManager {
   private lastError: string | null = null
   private pttKeyDown = false
   private pttBound = false
+  private localVadHoldFrames = 0
+  private localWasSpeaking = false
   private iceServers: RTCIceServer[] = [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
@@ -109,7 +225,6 @@ export class VoiceManager {
     })
 
     this.socket.on('voice:user-joined' as string, (data: { userId: string }) => {
-      // Track them as a voice user — they will initiate the peer connection to us
       this.voiceUsers.add(data.userId)
       this.emit('voice-users-change')
     })
@@ -124,7 +239,7 @@ export class VoiceManager {
     })
 
     this.socket.on('voice:offer' as string, (data: { from: string; offer: RTCSessionDescriptionInit }) => {
-      if (!this.isInVoice || !this.localStream) return
+      if (!this.isInVoice || (!this.processedStream && !this.localStream)) return
       this.createPeer(data.from, false, data.offer)
     })
 
@@ -161,8 +276,14 @@ export class VoiceManager {
     if (this.isInVoice) return
     this.lastError = null
 
+    const config = AUDIO_QUALITY_PRESETS[this.settings.audioQuality]
+
     try {
       await this.fetchIceServers()
+
+      // Create AudioContext first, then getUserMedia — ensures sample rates match
+      // The browser's default AudioContext rate is what getUserMedia will deliver
+      this.audioContext = new AudioContext()
 
       this.localStream = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -170,32 +291,83 @@ export class VoiceManager {
           noiseSuppression: this.settings.noiseSuppression,
           echoCancellation: true,
           autoGainControl: true,
-          channelCount: 1,
+          channelCount: config.channelCount,
         },
       })
-
-      // Create AudioContext matching the mic's actual sample rate to avoid cross-rate errors
-      const trackSettings = this.localStream.getAudioTracks()[0]?.getSettings()
-      const sampleRate = trackSettings?.sampleRate || undefined
-      this.audioContext = new AudioContext(sampleRate ? { sampleRate } : undefined)
       if (this.audioContext.state === 'suspended') {
         await this.audioContext.resume()
       }
 
-      // Set up input gain control
-      const source = this.audioContext.createMediaStreamSource(this.localStream)
+      // Build audio processing pipeline:
+      // Source → InputGain → HighPass(80Hz) → LowPass(14kHz) → [RNNoise] → Compressor → Analyser → NoiseGate → Destination
+      this.localSourceNode = this.audioContext.createMediaStreamSource(this.localStream)
+
+      // Input gain control
       this.inputGainNode = this.audioContext.createGain()
       this.inputGainNode.gain.value = this.settings.inputVolume / 100
 
-      // Analyser for local VAD
+      // High-pass filter (80Hz) — removes AC hum, desk rumble, plosive pops
+      this.highPassFilter = this.audioContext.createBiquadFilter()
+      this.highPassFilter.type = 'highpass'
+      this.highPassFilter.frequency.value = 80
+      this.highPassFilter.Q.value = 0.707 // Butterworth
+
+      // Low-pass filter (14kHz) — cuts high-freq hiss above voice range
+      this.lowPassFilter = this.audioContext.createBiquadFilter()
+      this.lowPassFilter.type = 'lowpass'
+      this.lowPassFilter.frequency.value = 14000
+      this.lowPassFilter.Q.value = 0.707 // Butterworth
+
+      // Dynamics compressor — normalizes volume across users
+      this.compressorNode = this.audioContext.createDynamicsCompressor()
+      this.compressorNode.threshold.value = -24
+      this.compressorNode.ratio.value = 4
+      this.compressorNode.knee.value = 12
+      this.compressorNode.attack.value = 0.003 // 3ms
+      this.compressorNode.release.value = 0.15 // 150ms
+
+      // Analyser for VAD (before noise gate so we read unmasked signal)
       this.analyserNode = this.audioContext.createAnalyser()
-      this.analyserNode.fftSize = 256
-      source.connect(this.inputGainNode)
-      this.inputGainNode.connect(this.analyserNode)
+      this.analyserNode.fftSize = 2048
+
+      // Noise gate (GainNode controlled by VAD)
+      this.noiseGateGain = this.audioContext.createGain()
+      this.noiseGateGain.gain.value = NOISE_GATE_FLOOR // start at comfort noise floor
+
+      // Output destination for processed stream
+      this.processedStreamDest = this.audioContext.createMediaStreamDestination()
+
+      // Connect the chain
+      this.localSourceNode.connect(this.inputGainNode)
+      this.inputGainNode.connect(this.highPassFilter)
+      this.highPassFilter.connect(this.lowPassFilter)
+
+      // RNNoise insertion point: between lowPass and compressor
+      let preCompressorNode: AudioNode = this.lowPassFilter
+
+      if (this.settings.advancedNoiseSuppression) {
+        try {
+          const { createRNNoiseNode } = await import('./RNNoiseProcessor')
+          this.rnnoiseNode = await createRNNoiseNode(this.audioContext)
+          this.lowPassFilter.connect(this.rnnoiseNode)
+          preCompressorNode = this.rnnoiseNode
+        } catch (e) {
+          console.warn('Failed to load RNNoise, falling back to standard processing:', e)
+        }
+      }
+
+      preCompressorNode.connect(this.compressorNode)
+      this.compressorNode.connect(this.analyserNode)
+      this.analyserNode.connect(this.noiseGateGain)
+      this.noiseGateGain.connect(this.processedStreamDest)
+
+      // Use processed stream for WebRTC
+      this.processedStream = this.processedStreamDest.stream
 
       // Start muted
       this.isMuted = true
       this.localStream.getAudioTracks().forEach((t) => (t.enabled = false))
+      this.processedStream.getAudioTracks().forEach((t) => (t.enabled = false))
 
       this.isInVoice = true
       this.voiceUsers.add(this.socket.id!)
@@ -216,6 +388,12 @@ export class VoiceManager {
         this.localStream.getTracks().forEach((t) => t.stop())
         this.localStream = null
       }
+      if (this.processedStream) {
+        this.processedStream.getTracks().forEach((t) => t.stop())
+        this.processedStream = null
+      }
+      try { this.rnnoiseNode?.disconnect() } catch { /* ignore */ }
+      this.rnnoiseNode = null
       if (this.audioContext) {
         this.audioContext.close()
         this.audioContext = null
@@ -253,20 +431,37 @@ export class VoiceManager {
       this.localStream = null
     }
 
+    if (this.processedStream) {
+      this.processedStream.getTracks().forEach((t) => t.stop())
+      this.processedStream = null
+    }
+
     this.stopLocalVAD()
     this.unbindPTT()
+
+    // Disconnect RNNoise node
+    try { this.rnnoiseNode?.disconnect() } catch { /* ignore */ }
+    this.rnnoiseNode = null
 
     if (this.audioContext) {
       this.audioContext.close()
       this.audioContext = null
     }
 
+    this.localSourceNode = null
     this.inputGainNode = null
+    this.highPassFilter = null
+    this.lowPassFilter = null
+    this.compressorNode = null
+    this.noiseGateGain = null
     this.analyserNode = null
+    this.processedStreamDest = null
     this.speakingUsers.clear()
     this.voiceUsers.clear()
     this.isInVoice = false
     this.isMuted = true
+    this.localVadHoldFrames = 0
+    this.localWasSpeaking = false
 
     this.emit('voice-state-change')
     this.emit('muted-change')
@@ -279,28 +474,41 @@ export class VoiceManager {
       this.destroyPeer(userId)
     }
 
-    if (!this.localStream) return
+    const streamToSend = this.processedStream || this.localStream
+    if (!streamToSend) return
+
+    const config = AUDIO_QUALITY_PRESETS[this.settings.audioQuality]
 
     const peer = new SimplePeer({
       initiator,
-      stream: this.localStream,
+      stream: streamToSend,
       trickle: true,
       config: {
         iceServers: this.iceServers,
       },
-      sdpTransform: setHighQualityOpus,
+      sdpTransform: (sdp: string) => applyOpusSdpTransform(sdp, config),
     })
 
     const audioEl = new Audio()
     audioEl.autoplay = true
 
-    // Create audio nodes for this peer (will be set up on stream)
     const analyser = this.audioContext!.createAnalyser()
-    analyser.fftSize = 256
+    analyser.fftSize = 2048
     const gainNode = this.audioContext!.createGain()
     gainNode.gain.value = this.settings.outputVolume / 100
 
-    const conn: PeerConnection = { peer, audioEl, analyser, gainNode, sourceNode: null }
+    const conn: PeerConnection = {
+      peer,
+      audioEl,
+      analyser,
+      gainNode,
+      sourceNode: null,
+      outputHighPass: null,
+      outputCompressor: null,
+      vadBuffer: new Float32Array(new ArrayBuffer(2048 * 4)),
+      holdFrames: 0,
+      wasSpeaking: false,
+    }
     this.peers.set(userId, conn)
 
     peer.on('signal', (signalData: SimplePeer.SignalData) => {
@@ -314,26 +522,42 @@ export class VoiceManager {
     })
 
     peer.on('stream', (stream: MediaStream) => {
-      // Set stream on audio element as fallback
       audioEl.srcObject = stream
 
-      // Connect to Web Audio API for volume control + VAD
+      // Output processing: HighPass(60Hz) → Compressor → GainNode → Analyser → Destination
       try {
-        // Resume AudioContext if suspended (stream arrival = good time to try)
         if (this.audioContext!.state === 'suspended') {
           this.audioContext!.resume()
         }
         const source = this.audioContext!.createMediaStreamSource(stream)
         conn.sourceNode = source
-        source.connect(gainNode)
+
+        // Output high-pass filter (60Hz) — protects from pops and rumble
+        const outputHP = this.audioContext!.createBiquadFilter()
+        outputHP.type = 'highpass'
+        outputHP.frequency.value = 60
+        outputHP.Q.value = 0.707
+        conn.outputHighPass = outputHP
+
+        // Output compressor — prevents volume spikes from unprocessed peers
+        const outputComp = this.audioContext!.createDynamicsCompressor()
+        outputComp.threshold.value = -20
+        outputComp.ratio.value = 3
+        outputComp.knee.value = 10
+        outputComp.attack.value = 0.003
+        outputComp.release.value = 0.15
+        conn.outputCompressor = outputComp
+
+        source.connect(outputHP)
+        outputHP.connect(outputComp)
+        outputComp.connect(gainNode)
         gainNode.connect(analyser)
         analyser.connect(this.audioContext!.destination)
-        // Mute HTML audio element — Web Audio API handles playback now
-        // Without this, audio plays twice (echo/double volume)
+
+        // Mute HTML audio element — Web Audio API handles playback
         audioEl.muted = true
       } catch (e) {
         console.warn('Failed to setup audio processing for peer, falling back to audio element:', e)
-        // Audio element remains unmuted as fallback
       }
 
       this.startRemoteVAD()
@@ -353,17 +577,29 @@ export class VoiceManager {
     peer.on('connect', () => {
       try {
         const pc = (peer as unknown as { _pc: RTCPeerConnection })._pc
+
+        // Set encoding parameters from preset
         for (const sender of pc.getSenders()) {
           if (sender.track?.kind === 'audio') {
             const params = sender.getParameters()
             if (params.encodings?.length) {
-              params.encodings[0].maxBitrate = 128_000 // 128 kbps ceiling
+              params.encodings[0].maxBitrate = config.bitrate
+              params.encodings[0].priority = 'high'
+              // networkPriority may not be in TS types but is in the spec
+              ;(params.encodings[0] as Record<string, unknown>).networkPriority = 'high'
               sender.setParameters(params).catch(() => {})
             }
           }
         }
+
+        // Jitter buffer hint for low-latency playback
+        for (const receiver of pc.getReceivers()) {
+          if (receiver.track?.kind === 'audio') {
+            ;(receiver as unknown as Record<string, unknown>).playoutDelayHint = 0.05
+          }
+        }
       } catch {
-        // Non-critical; SDP transform already handles this
+        // Non-critical; SDP transform already handles quality
       }
     })
 
@@ -378,6 +614,8 @@ export class VoiceManager {
 
     try {
       conn.sourceNode?.disconnect()
+      conn.outputHighPass?.disconnect()
+      conn.outputCompressor?.disconnect()
       conn.gainNode.disconnect()
       conn.analyser.disconnect()
       conn.peer.destroy()
@@ -396,6 +634,7 @@ export class VoiceManager {
 
     this.isMuted = muted
     this.localStream?.getAudioTracks().forEach((t) => (t.enabled = !muted))
+    this.processedStream?.getAudioTracks().forEach((t) => (t.enabled = !muted))
     this.emit('muted-change')
   }
 
@@ -433,46 +672,15 @@ export class VoiceManager {
     this.settings.inputDevice = deviceId
     if (!this.isInVoice || !this.localStream) return
 
-    // Get new stream with new device
-    const newStream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        deviceId: deviceId !== 'default' ? { exact: deviceId } : undefined,
-        noiseSuppression: this.settings.noiseSuppression,
-        echoCancellation: true,
-        autoGainControl: true,
-        channelCount: 1,
-      },
-    })
-
-    // Stop old tracks
-    this.localStream.getTracks().forEach((t) => t.stop())
-
-    // Apply mute state to new tracks
-    newStream.getAudioTracks().forEach((t) => (t.enabled = !this.isMuted))
-    this.localStream = newStream
-
-    // Reconnect audio processing
-    if (this.audioContext && this.inputGainNode && this.analyserNode) {
-      const source = this.audioContext.createMediaStreamSource(newStream)
-      source.connect(this.inputGainNode)
-    }
-
-    // Replace stream in all peers
-    for (const [, conn] of this.peers) {
-      try {
-        const oldTrack = conn.peer.streams?.[0]?.getAudioTracks()[0]
-        const newTrack = newStream.getAudioTracks()[0]
-        if (oldTrack && newTrack) {
-          conn.peer.replaceTrack(oldTrack, newTrack, this.localStream)
-        }
-      } catch {
-        // If replaceTrack fails, the peer will still work with old track
-      }
-    }
+    // Switching mics may change sample rate — safest to do a full reconnect
+    // which rebuilds the entire audio pipeline at the new mic's rate
+    await this.reconnectWithNewSettings()
   }
 
   updateSettings(newSettings: Partial<VoiceSettings>) {
     const oldPTT = this.settings.pushToTalk
+    const oldQuality = this.settings.audioQuality
+    const oldAdvNS = this.settings.advancedNoiseSuppression
     Object.assign(this.settings, newSettings)
 
     if (newSettings.outputVolume !== undefined) this.setOutputVolume(newSettings.outputVolume)
@@ -486,6 +694,24 @@ export class VoiceManager {
       } else {
         this.unbindPTT()
       }
+    }
+
+    // Reconnect if quality or advanced noise suppression changed
+    if (
+      (newSettings.audioQuality !== undefined && newSettings.audioQuality !== oldQuality) ||
+      (newSettings.advancedNoiseSuppression !== undefined && newSettings.advancedNoiseSuppression !== oldAdvNS)
+    ) {
+      this.reconnectWithNewSettings()
+    }
+  }
+
+  private async reconnectWithNewSettings() {
+    if (!this.isInVoice) return
+    const wasMuted = this.isMuted
+    this.leaveVoice()
+    await this.joinVoice()
+    if (!wasMuted) {
+      this.setMuted(false)
     }
   }
 
@@ -512,6 +738,7 @@ export class VoiceManager {
     if (this.isInVoice) {
       this.isMuted = true
       this.localStream?.getAudioTracks().forEach((t) => (t.enabled = false))
+      this.processedStream?.getAudioTracks().forEach((t) => (t.enabled = false))
       this.emit('muted-change')
     }
   }
@@ -525,6 +752,7 @@ export class VoiceManager {
       this.pttKeyDown = true
       this.isMuted = false
       this.localStream?.getAudioTracks().forEach((t) => (t.enabled = true))
+      this.processedStream?.getAudioTracks().forEach((t) => (t.enabled = true))
       this.emit('muted-change')
     }
   }
@@ -535,6 +763,7 @@ export class VoiceManager {
       this.pttKeyDown = false
       this.isMuted = true
       this.localStream?.getAudioTracks().forEach((t) => (t.enabled = false))
+      this.processedStream?.getAudioTracks().forEach((t) => (t.enabled = false))
       this.emit('muted-change')
     }
   }
@@ -544,87 +773,131 @@ export class VoiceManager {
       this.pttKeyDown = false
       this.isMuted = true
       this.localStream?.getAudioTracks().forEach((t) => (t.enabled = false))
+      this.processedStream?.getAudioTracks().forEach((t) => (t.enabled = false))
       this.emit('muted-change')
     }
   }
 
-  // VAD for remote peers
+  // ——— VAD (Voice Activity Detection) ———
+
+  // RMS-based VAD for remote peers with hysteresis
   private startRemoteVAD() {
     if (this.vadIntervalId) return
 
-    const dataArray = new Uint8Array(128)
     this.vadIntervalId = setInterval(() => {
-      const newSpeaking = new Set<string>()
+      let changed = false
 
       for (const [userId, conn] of this.peers) {
-        conn.analyser.getByteFrequencyData(dataArray)
-        let sum = 0
-        for (let i = 0; i < dataArray.length; i++) sum += dataArray[i]
-        const avg = sum / dataArray.length
-        if (avg > 15) {
-          newSpeaking.add(userId)
-        }
-      }
+        conn.analyser.getFloatTimeDomainData(conn.vadBuffer)
 
-      // Check if changed
-      let changed = false
-      if (newSpeaking.size !== this.speakingUsers.size) {
-        changed = true
-      } else {
-        for (const uid of newSpeaking) {
-          if (!this.speakingUsers.has(uid)) { changed = true; break }
+        // Calculate RMS (true signal power)
+        let sumSquares = 0
+        for (let i = 0; i < conn.vadBuffer.length; i++) {
+          sumSquares += conn.vadBuffer[i] * conn.vadBuffer[i]
+        }
+        const rms = Math.sqrt(sumSquares / conn.vadBuffer.length)
+
+        // Hysteresis: higher threshold to start, lower to stop
+        let isSpeaking: boolean
+        if (conn.wasSpeaking) {
+          isSpeaking = rms > SILENCE_THRESHOLD
+        } else {
+          isSpeaking = rms > SPEECH_THRESHOLD
+        }
+
+        if (isSpeaking) {
+          conn.holdFrames = HOLD_FRAMES
+          if (!conn.wasSpeaking) {
+            conn.wasSpeaking = true
+            this.speakingUsers.add(userId)
+            changed = true
+          }
+        } else {
+          if (conn.holdFrames > 0) {
+            conn.holdFrames--
+          } else if (conn.wasSpeaking) {
+            conn.wasSpeaking = false
+            this.speakingUsers.delete(userId)
+            changed = true
+          }
         }
       }
 
       if (changed) {
-        // Keep users who are still speaking, add new ones
-        // Use debounce: only remove users who have been silent for more than 1 check
-        for (const uid of newSpeaking) {
-          this.speakingUsers.add(uid)
-        }
-        for (const uid of this.speakingUsers) {
-          if (!newSpeaking.has(uid) && uid !== this.socket.id) {
-            this.speakingUsers.delete(uid)
-          }
-        }
         this.emit('speaking-change')
       }
     }, 33) // ~30fps
   }
 
-  // VAD for local mic
+  // RMS-based VAD for local mic with hysteresis + noise gate control
   private startLocalVAD() {
     if (this.localVadIntervalId || !this.analyserNode) return
 
-    const dataArray = new Uint8Array(128)
-    let wasSpeaking = false
+    const bufferLength = this.analyserNode.fftSize
+    const dataArray = new Float32Array(bufferLength)
+
+    this.localVadHoldFrames = 0
+    this.localWasSpeaking = false
 
     this.localVadIntervalId = setInterval(() => {
       if (!this.analyserNode || this.isMuted) {
-        if (wasSpeaking) {
-          wasSpeaking = false
+        if (this.localWasSpeaking) {
+          this.localWasSpeaking = false
+          this.localVadHoldFrames = 0
           this.speakingUsers.delete(this.socket.id!)
           this.emit('speaking-change')
+          // Close noise gate
+          this.rampNoiseGate(NOISE_GATE_FLOOR, 0.08)
         }
         return
       }
 
-      this.analyserNode.getByteFrequencyData(dataArray)
-      let sum = 0
-      for (let i = 0; i < dataArray.length; i++) sum += dataArray[i]
-      const avg = sum / dataArray.length
-      const isSpeaking = avg > 15
+      this.analyserNode.getFloatTimeDomainData(dataArray)
 
-      if (isSpeaking !== wasSpeaking) {
-        wasSpeaking = isSpeaking
-        if (isSpeaking) {
-          this.speakingUsers.add(this.socket.id!)
-        } else {
-          this.speakingUsers.delete(this.socket.id!)
-        }
-        this.emit('speaking-change')
+      // Calculate RMS
+      let sumSquares = 0
+      for (let i = 0; i < bufferLength; i++) {
+        sumSquares += dataArray[i] * dataArray[i]
       }
-    }, 33)
+      const rms = Math.sqrt(sumSquares / bufferLength)
+
+      // Hysteresis: higher threshold to start, lower to stop
+      let isSpeaking: boolean
+      if (this.localWasSpeaking) {
+        isSpeaking = rms > SILENCE_THRESHOLD
+      } else {
+        isSpeaking = rms > SPEECH_THRESHOLD
+      }
+
+      if (isSpeaking) {
+        this.localVadHoldFrames = HOLD_FRAMES
+        if (!this.localWasSpeaking) {
+          this.localWasSpeaking = true
+          this.speakingUsers.add(this.socket.id!)
+          this.emit('speaking-change')
+          // Open noise gate — fast 10ms attack
+          this.rampNoiseGate(1.0, 0.01)
+        }
+      } else {
+        if (this.localVadHoldFrames > 0) {
+          this.localVadHoldFrames--
+        } else if (this.localWasSpeaking) {
+          this.localWasSpeaking = false
+          this.speakingUsers.delete(this.socket.id!)
+          this.emit('speaking-change')
+          // Close noise gate — 80ms release to comfort noise floor
+          this.rampNoiseGate(NOISE_GATE_FLOOR, 0.08)
+        }
+      }
+    }, 33) // ~30fps
+  }
+
+  private rampNoiseGate(target: number, duration: number) {
+    if (!this.noiseGateGain || !this.audioContext) return
+    const now = this.audioContext.currentTime
+    this.noiseGateGain.gain.cancelScheduledValues(now)
+    this.noiseGateGain.gain.setValueAtTime(this.noiseGateGain.gain.value, now)
+    this.noiseGateGain.gain.linearRampToValueAtTime(target, now + duration)
   }
 
   private stopLocalVAD() {
@@ -638,16 +911,24 @@ export class VoiceManager {
     }
   }
 
-  // Returns mic input level 0-100 (read on demand, no re-renders)
-  private micLevelData = new Uint8Array(128)
+  // Returns mic input level 0-100 using RMS with logarithmic dB scale
+  private micLevelData = new Float32Array(new ArrayBuffer(2048 * 4))
   getMicLevel(): number {
     if (!this.analyserNode || !this.isInVoice) return 0
-    this.analyserNode.getByteFrequencyData(this.micLevelData)
-    let sum = 0
-    for (let i = 0; i < this.micLevelData.length; i++) sum += this.micLevelData[i]
-    const avg = sum / this.micLevelData.length
-    // Normalize to 0-100, with some amplification for typical speech levels
-    return Math.min(100, Math.round((avg / 128) * 100))
+    this.analyserNode.getFloatTimeDomainData(this.micLevelData)
+
+    let sumSquares = 0
+    for (let i = 0; i < this.micLevelData.length; i++) {
+      sumSquares += this.micLevelData[i] * this.micLevelData[i]
+    }
+    const rms = Math.sqrt(sumSquares / this.micLevelData.length)
+
+    // Convert to dB and map to 0-100
+    if (rms < 0.0001) return 0
+    const db = 20 * Math.log10(rms)
+    // Map -60dB..0dB → 0..100
+    const normalized = Math.max(0, Math.min(100, ((db + 60) / 60) * 100))
+    return Math.round(normalized)
   }
 
   // Getters
