@@ -18,6 +18,9 @@ export default function VideoPlayer({ videoState, onPlay, onPause, onSeek, onEnd
   const seekDetectorLastTime = useRef(0)
   const playDebounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pauseDebounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const videoStateRef = useRef(videoState)
+  videoStateRef.current = videoState
+  const driftBurstInterval = useRef<ReturnType<typeof setInterval> | null>(null)
   const setRemoteLock = useCallback((duration: number) => {
     isRemoteUpdate.current = true
     if (remoteUpdateTimer.current) clearTimeout(remoteUpdateTimer.current)
@@ -26,6 +29,37 @@ export default function VideoPlayer({ videoState, onPlay, onPause, onSeek, onEnd
       remoteUpdateTimer.current = null
     }, duration)
   }, [])
+
+  // Burst drift correction: runs every 1s for 6s after a sync event
+  const startDriftBurst = useCallback(() => {
+    if (driftBurstInterval.current) clearInterval(driftBurstInterval.current)
+    let count = 0
+    driftBurstInterval.current = setInterval(() => {
+      count++
+      if (count >= 6) {
+        if (driftBurstInterval.current) clearInterval(driftBurstInterval.current)
+        driftBurstInterval.current = null
+        return
+      }
+      const player = playerRef.current
+      if (!player || isRemoteUpdate.current) return
+      try {
+        const vs = videoStateRef.current
+        if (!vs.isPlaying) return
+        const elapsed = (Date.now() - vs.timestamp) / 1000
+        const expectedTime = vs.currentTime + elapsed
+        const currentTime = player.getCurrentTime()
+        const diff = Math.abs(currentTime - expectedTime)
+        if (diff > 1) {
+          setRemoteLock(200)
+          player.seekTo(expectedTime, true)
+          seekDetectorLastTime.current = expectedTime
+        }
+      } catch {
+        // Player not ready
+      }
+    }, 1000)
+  }, [setRemoteLock])
 
   const syncPlayer = useCallback(() => {
     const player = playerRef.current
@@ -62,7 +96,10 @@ export default function VideoPlayer({ videoState, onPlay, onPause, onSeek, onEnd
     } catch {
       // Player not ready yet
     }
-  }, [videoState, setRemoteLock])
+
+    // Start burst drift correction for the next 6 seconds
+    startDriftBurst()
+  }, [videoState, setRemoteLock, startDriftBurst])
 
   useEffect(() => {
     syncPlayer()
@@ -74,6 +111,7 @@ export default function VideoPlayer({ videoState, onPlay, onPause, onSeek, onEnd
       if (playDebounceTimer.current) clearTimeout(playDebounceTimer.current)
       if (pauseDebounceTimer.current) clearTimeout(pauseDebounceTimer.current)
       if (remoteUpdateTimer.current) clearTimeout(remoteUpdateTimer.current)
+      if (driftBurstInterval.current) clearInterval(driftBurstInterval.current)
     }
   }, [])
 
