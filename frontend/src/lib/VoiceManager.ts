@@ -1,5 +1,9 @@
-import SimplePeer from 'simple-peer'
+import type { types as mediasoupTypes } from 'mediasoup-client'
 import type { Socket } from 'socket.io-client'
+
+type Transport = mediasoupTypes.Transport
+type Producer = mediasoupTypes.Producer
+type Consumer = mediasoupTypes.Consumer
 
 // ——— Quality Presets ———
 
@@ -9,7 +13,7 @@ interface AudioQualityConfig {
   label: string
   bitrate: number
   channelCount: number
-  fmtp: Record<string, number>
+  opusParams: Record<string, number>
   ptime: number
 }
 
@@ -18,7 +22,7 @@ export const AUDIO_QUALITY_PRESETS: Record<AudioQualityPreset, AudioQualityConfi
     label: 'Low',
     bitrate: 32_000,
     channelCount: 1,
-    fmtp: {
+    opusParams: {
       maxaveragebitrate: 32000,
       useinbandfec: 1,
       usedtx: 1,
@@ -30,7 +34,7 @@ export const AUDIO_QUALITY_PRESETS: Record<AudioQualityPreset, AudioQualityConfi
     label: 'Medium',
     bitrate: 64_000,
     channelCount: 1,
-    fmtp: {
+    opusParams: {
       maxaveragebitrate: 64000,
       useinbandfec: 1,
       usedtx: 0,
@@ -42,7 +46,7 @@ export const AUDIO_QUALITY_PRESETS: Record<AudioQualityPreset, AudioQualityConfi
     label: 'High',
     bitrate: 96_000,
     channelCount: 1,
-    fmtp: {
+    opusParams: {
       maxaveragebitrate: 96000,
       useinbandfec: 1,
       usedtx: 0,
@@ -54,7 +58,7 @@ export const AUDIO_QUALITY_PRESETS: Record<AudioQualityPreset, AudioQualityConfi
     label: 'Ultra',
     bitrate: 128_000,
     channelCount: 2,
-    fmtp: {
+    opusParams: {
       maxaveragebitrate: 128000,
       useinbandfec: 1,
       usedtx: 0,
@@ -64,43 +68,6 @@ export const AUDIO_QUALITY_PRESETS: Record<AudioQualityPreset, AudioQualityConfi
     },
     ptime: 10,
   },
-}
-
-function applyOpusSdpTransform(sdp: string, config: AudioQualityConfig): string {
-  const opusMatch = sdp.match(/a=rtpmap:(\d+) opus\/48000\/2/)
-  if (!opusMatch) return sdp
-  const pt = opusMatch[1]
-
-  // Build fmtp string from config
-  const fmtpParts = Object.entries(config.fmtp)
-    .map(([k, v]) => `${k}=${v}`)
-    .join(';')
-  const qualityFmtp = `a=fmtp:${pt} ${fmtpParts}\r\n`
-
-  // Replace existing fmtp or insert after rtpmap
-  const fmtpRegex = new RegExp(`a=fmtp:${pt} [^\r\n]+\r\n`)
-  if (fmtpRegex.test(sdp)) {
-    sdp = sdp.replace(fmtpRegex, qualityFmtp)
-  } else {
-    sdp = sdp.replace(
-      new RegExp(`(a=rtpmap:${pt} opus/48000/2\r\n)`),
-      `$1${qualityFmtp}`
-    )
-  }
-
-  // Set ptime
-  const ptimeRegex = /a=ptime:\d+\r\n/
-  const ptimeLine = `a=ptime:${config.ptime}\r\n`
-  if (ptimeRegex.test(sdp)) {
-    sdp = sdp.replace(ptimeRegex, ptimeLine)
-  } else {
-    sdp = sdp.replace(
-      new RegExp(`(a=rtpmap:${pt} opus/48000/2\r\n)`),
-      `$1${ptimeLine}`
-    )
-  }
-
-  return sdp
 }
 
 // ——— Settings ———
@@ -127,11 +94,12 @@ export const DEFAULT_VOICE_SETTINGS: VoiceSettings = {
   advancedNoiseSuppression: false,
 }
 
-// ——— Peer Connection ———
+// ——— Consumer Entry (replaces PeerConnection) ———
 
-interface PeerConnection {
-  peer: SimplePeer.Instance
-  audioEl: HTMLAudioElement
+interface ConsumerEntry {
+  consumer: Consumer
+  socketId: string
+  audioEl: HTMLAudioElement // silent element to activate Chrome's WebRTC media pipeline
   analyser: AnalyserNode
   gainNode: GainNode
   sourceNode: MediaStreamAudioSourceNode | null
@@ -165,7 +133,13 @@ const NOISE_GATE_FLOOR = 0.005 // comfort noise floor
 
 export class VoiceManager {
   private socket: Socket
-  private peers = new Map<string, PeerConnection>()
+  private device: mediasoupTypes.Device | null = null
+  private sendTransport: Transport | null = null
+  private recvTransport: Transport | null = null
+  private producer: Producer | null = null
+  private consumers = new Map<string, ConsumerEntry>() // keyed by consumer.id
+  private producerToSocket = new Map<string, string>() // producerId -> socketId
+
   private localStream: MediaStream | null = null
   private processedStream: MediaStream | null = null
   private processedStreamDest: MediaStreamAudioDestinationNode | null = null
@@ -191,10 +165,6 @@ export class VoiceManager {
   private pttBound = false
   private localVadHoldFrames = 0
   private localWasSpeaking = false
-  private iceServers: RTCIceServer[] = [
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' },
-  ]
 
   constructor(socket: Socket, settings: VoiceSettings) {
     this.socket = socket
@@ -216,21 +186,12 @@ export class VoiceManager {
   }
 
   private setupSocketListeners() {
-    this.socket.on('voice:active-users' as string, (data: { userIds: string[] }) => {
-      for (const userId of data.userIds) {
-        this.voiceUsers.add(userId)
-        this.createPeer(userId, true)
-      }
-      this.emit('voice-users-change')
-    })
-
     this.socket.on('voice:user-joined' as string, (data: { userId: string }) => {
       this.voiceUsers.add(data.userId)
       this.emit('voice-users-change')
     })
 
     this.socket.on('voice:user-left' as string, (data: { userId: string }) => {
-      this.destroyPeer(data.userId)
       this.voiceUsers.delete(data.userId)
       this.speakingUsers.delete(data.userId)
       this.emit('voice-users-change')
@@ -238,38 +199,22 @@ export class VoiceManager {
       this.emit('voice-state-change')
     })
 
-    this.socket.on('voice:offer' as string, (data: { from: string; offer: RTCSessionDescriptionInit }) => {
-      if (!this.isInVoice || (!this.processedStream && !this.localStream)) return
-      this.createPeer(data.from, false, data.offer)
+    this.socket.on('voice:new-producer' as string, (data: { socketId: string; producerId: string }) => {
+      if (!this.isInVoice || !this.device) return
+      this.consumeProducer(data.socketId, data.producerId).catch((err) => {
+        console.error('[voice] consumeProducer failed:', err)
+      })
     })
 
-    this.socket.on('voice:answer' as string, (data: { from: string; answer: RTCSessionDescriptionInit }) => {
-      const conn = this.peers.get(data.from)
-      if (conn) {
-        conn.peer.signal(data.answer as SimplePeer.SignalData)
-      }
-    })
-
-    this.socket.on('voice:ice-candidate' as string, (data: { from: string; candidate: RTCIceCandidateInit }) => {
-      const conn = this.peers.get(data.from)
-      if (conn) {
-        conn.peer.signal({ candidate: data.candidate } as SimplePeer.SignalData)
-      }
-    })
-  }
-
-  private async fetchIceServers() {
-    try {
-      const res = await fetch('/api/ice-servers')
-      if (res.ok) {
-        const data = await res.json()
-        if (data.iceServers?.length) {
-          this.iceServers = data.iceServers
+    this.socket.on('voice:producer-closed' as string, (data: { socketId: string; producerId: string }) => {
+      // Find and destroy consumers for this producer
+      for (const [consumerId, entry] of this.consumers) {
+        if (entry.consumer.producerId === data.producerId) {
+          this.destroyConsumer(consumerId)
+          break
         }
       }
-    } catch {
-      // Fall back to default STUN servers
-    }
+    })
   }
 
   async joinVoice() {
@@ -279,10 +224,7 @@ export class VoiceManager {
     const config = AUDIO_QUALITY_PRESETS[this.settings.audioQuality]
 
     try {
-      await this.fetchIceServers()
-
       // Create AudioContext first, then getUserMedia — ensures sample rates match
-      // The browser's default AudioContext rate is what getUserMedia will deliver
       this.audioContext = new AudioContext()
 
       this.localStream = await navigator.mediaDevices.getUserMedia({
@@ -361,17 +303,61 @@ export class VoiceManager {
       this.analyserNode.connect(this.noiseGateGain)
       this.noiseGateGain.connect(this.processedStreamDest)
 
-      // Use processed stream for WebRTC
+      // Use processed stream for mediasoup
       this.processedStream = this.processedStreamDest.stream
 
       // Start muted — only disable source tracks; processedStream stays enabled
-      // so WebRTC keeps the track alive, and the pipeline just receives silence
+      // so mediasoup keeps the track alive, and the pipeline just receives silence
       this.isMuted = true
       this.localStream.getAudioTracks().forEach((t) => (t.enabled = false))
 
       this.isInVoice = true
       this.voiceUsers.add(this.socket.id!)
-      this.socket.emit('voice:join' as string)
+
+      // Join room on server — get router RTP capabilities + existing producers
+      const { rtpCapabilities, existingProducers } = await new Promise<{
+        rtpCapabilities: unknown
+        existingProducers: { socketId: string; producerId: string }[]
+      }>((resolve) => {
+        this.socket.emit('voice:join' as string, (response: { rtpCapabilities: unknown; existingProducers: { socketId: string; producerId: string }[] }) => {
+          resolve(response)
+        })
+      })
+
+      // Create mediasoup Device and load router capabilities
+      const mediasoupClient = await import('mediasoup-client')
+      this.device = new mediasoupClient.Device()
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await this.device.load({ routerRtpCapabilities: rtpCapabilities as any })
+
+      // Create send transport
+      await this.createSendTransport()
+
+      // Produce audio
+      if (this.sendTransport && this.processedStream) {
+        const audioTrack = this.processedStream.getAudioTracks()[0]
+        this.producer = await this.sendTransport.produce({
+          track: audioTrack,
+          codecOptions: {
+            opusStereo: config.opusParams.stereo === 1 ? true : false,
+            opusFec: config.opusParams.useinbandfec === 1 ? true : false,
+            opusDtx: config.opusParams.usedtx === 1 ? true : false,
+            opusMaxPlaybackRate: 48000,
+            opusPtime: config.ptime,
+          },
+          encodings: [{ maxBitrate: config.bitrate }],
+        })
+        // Start paused (muted)
+        this.producer.pause()
+      }
+
+      // Create recv transport
+      await this.createRecvTransport()
+
+      // Consume existing producers
+      for (const { socketId, producerId } of existingProducers) {
+        await this.consumeProducer(socketId, producerId)
+      }
 
       this.startLocalVAD()
 
@@ -382,7 +368,7 @@ export class VoiceManager {
       this.emit('voice-state-change')
       this.emit('muted-change')
     } catch (err) {
-      console.error('Failed to join voice:', err)
+      console.error('[voice] joinVoice failed:', err)
       // Clean up partial state
       if (this.localStream) {
         this.localStream.getTracks().forEach((t) => t.stop())
@@ -394,6 +380,13 @@ export class VoiceManager {
       }
       try { this.rnnoiseNode?.disconnect() } catch { /* ignore */ }
       this.rnnoiseNode = null
+      this.producer?.close()
+      this.producer = null
+      this.sendTransport?.close()
+      this.sendTransport = null
+      this.recvTransport?.close()
+      this.recvTransport = null
+      this.device = null
       if (this.audioContext) {
         this.audioContext.close()
         this.audioContext = null
@@ -417,14 +410,260 @@ export class VoiceManager {
     }
   }
 
+  private async createSendTransport() {
+    const params = await new Promise<{
+      id: string
+      iceParameters: unknown
+      iceCandidates: unknown
+      dtlsParameters: unknown
+    } | null>((resolve) => {
+      this.socket.emit('voice:create-send-transport' as string, (response: { id: string; iceParameters: unknown; iceCandidates: unknown; dtlsParameters: unknown } | null) => {
+        resolve(response)
+      })
+    })
+
+    if (!params || !this.device) return
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    this.sendTransport = this.device.createSendTransport({
+      ...(params as any),
+      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+    })
+
+    this.sendTransport.on('connectionstatechange', (state: string) => {
+      console.log(`[voice] sendTransport connectionState: ${state}`)
+    })
+
+    this.sendTransport.on(
+      'connect',
+      ({ dtlsParameters }: { dtlsParameters: mediasoupTypes.DtlsParameters }, callback: () => void, errback: (error: Error) => void) => {
+        this.socket.emit(
+          'voice:connect-transport' as string,
+          { transportId: this.sendTransport!.id, dtlsParameters },
+          (response: { connected: boolean }) => {
+            if (response.connected) callback()
+            else errback(new Error('Transport connect failed'))
+          }
+        )
+      }
+    )
+
+    this.sendTransport.on(
+      'produce',
+      ({ kind, rtpParameters }: { kind: mediasoupTypes.MediaKind; rtpParameters: mediasoupTypes.RtpParameters; appData: mediasoupTypes.AppData }, callback: ({ id }: { id: string }) => void, errback: (error: Error) => void) => {
+        this.socket.emit(
+          'voice:produce' as string,
+          { kind, rtpParameters },
+          (response: { producerId: string | null }) => {
+            if (response.producerId) callback({ id: response.producerId })
+            else errback(new Error('Produce failed'))
+          }
+        )
+      }
+    )
+  }
+
+  private async createRecvTransport() {
+    const params = await new Promise<{
+      id: string
+      iceParameters: unknown
+      iceCandidates: unknown
+      dtlsParameters: unknown
+    } | null>((resolve) => {
+      this.socket.emit('voice:create-recv-transport' as string, (response: { id: string; iceParameters: unknown; iceCandidates: unknown; dtlsParameters: unknown } | null) => {
+        resolve(response)
+      })
+    })
+
+    if (!params || !this.device) return
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    this.recvTransport = this.device.createRecvTransport({
+      ...(params as any),
+      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+    })
+
+    this.recvTransport.on('connectionstatechange', (state: string) => {
+      console.log(`[voice] recvTransport connectionState: ${state}`)
+    })
+
+    this.recvTransport.on(
+      'connect',
+      ({ dtlsParameters }: { dtlsParameters: mediasoupTypes.DtlsParameters }, callback: () => void, errback: (error: Error) => void) => {
+        this.socket.emit(
+          'voice:connect-transport' as string,
+          { transportId: this.recvTransport!.id, dtlsParameters },
+          (response: { connected: boolean }) => {
+            if (response.connected) callback()
+            else errback(new Error('Transport connect failed'))
+          }
+        )
+      }
+    )
+  }
+
+  private async consumeProducer(socketId: string, producerId: string) {
+    if (!this.device || !this.recvTransport) {
+      console.warn('[voice] consumeProducer: no device or recvTransport')
+      return
+    }
+
+    this.producerToSocket.set(producerId, socketId)
+
+    const consumerParams = await new Promise<{
+      id: string
+      producerId: string
+      kind: string
+      rtpParameters: unknown
+    } | null>((resolve) => {
+      this.socket.emit(
+        'voice:consume' as string,
+        { producerId, rtpCapabilities: this.device!.rtpCapabilities },
+        (response: { id: string; producerId: string; kind: string; rtpParameters: unknown } | null) => {
+          resolve(response)
+        }
+      )
+    })
+
+    if (!consumerParams) {
+      console.warn('[voice] consumeProducer: server returned null')
+      return
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const consumer = await this.recvTransport.consume(consumerParams as any)
+
+    // Resume consumer on server FIRST (it starts paused) so media flows before we set up audio
+    await new Promise<void>((resolve) => {
+      this.socket.emit(
+        'voice:resume-consumer' as string,
+        { consumerId: consumer.id },
+        () => resolve()
+      )
+    })
+
+    const stream = new MediaStream([consumer.track])
+
+    // Ensure AudioContext is running (it was unlocked during joinVoice user gesture)
+    if (this.audioContext!.state === 'suspended') {
+      await this.audioContext!.resume()
+    }
+
+    // Chrome/Edge need an Audio element attached to the stream to activate
+    // the WebRTC media pipeline (MediaStreamAudioSourceNode alone won't trigger
+    // RTP decoding). Keep it at volume 0 — actual playback goes through AudioContext.
+    const audioEl = new Audio()
+    audioEl.srcObject = stream
+    audioEl.volume = 0
+    audioEl.play().catch(() => {
+      // Firefox may block autoplay — that's fine, AudioContext handles playback
+    })
+
+    const analyser = this.audioContext!.createAnalyser()
+    analyser.fftSize = 2048
+    const gainNode = this.audioContext!.createGain()
+    gainNode.gain.value = this.settings.outputVolume / 100
+
+    const entry: ConsumerEntry = {
+      consumer,
+      socketId,
+      audioEl,
+      analyser,
+      gainNode,
+      sourceNode: null,
+      outputHighPass: null,
+      outputCompressor: null,
+      vadBuffer: new Float32Array(new ArrayBuffer(2048 * 4)),
+      holdFrames: 0,
+      wasSpeaking: false,
+    }
+    this.consumers.set(consumer.id, entry)
+
+    // Build Web Audio chain: Source → HighPass → Compressor → Gain → Destination + Analyser
+    // AudioContext was unlocked during joinVoice user gesture, so playback works
+    // even when consume is triggered later by voice:new-producer (no user gesture)
+    try {
+      const source = this.audioContext!.createMediaStreamSource(stream)
+      entry.sourceNode = source
+
+      // Output high-pass filter (60Hz) — protects from pops and rumble
+      const outputHP = this.audioContext!.createBiquadFilter()
+      outputHP.type = 'highpass'
+      outputHP.frequency.value = 60
+      outputHP.Q.value = 0.707
+      entry.outputHighPass = outputHP
+
+      // Output compressor — prevents volume spikes
+      const outputComp = this.audioContext!.createDynamicsCompressor()
+      outputComp.threshold.value = -20
+      outputComp.ratio.value = 3
+      outputComp.knee.value = 10
+      outputComp.attack.value = 0.003
+      outputComp.release.value = 0.15
+      entry.outputCompressor = outputComp
+
+      source.connect(outputHP)
+      outputHP.connect(outputComp)
+      outputComp.connect(gainNode)
+      gainNode.connect(analyser) // for VAD
+      gainNode.connect(this.audioContext!.destination) // for actual playback
+
+    } catch (e) {
+      console.error('[voice] Failed to setup audio processing for consumer:', e)
+    }
+
+    this.startRemoteVAD()
+  }
+
+  private destroyConsumer(consumerId: string) {
+    const entry = this.consumers.get(consumerId)
+    if (!entry) return
+
+    try {
+      entry.sourceNode?.disconnect()
+      entry.outputHighPass?.disconnect()
+      entry.outputCompressor?.disconnect()
+      entry.gainNode.disconnect()
+      entry.analyser.disconnect()
+      entry.consumer.close()
+      entry.audioEl.pause()
+      entry.audioEl.srcObject = null
+    } catch {
+      // Ignore cleanup errors
+    }
+
+    // Clean up speaking state
+    this.speakingUsers.delete(entry.socketId)
+
+    // Clean up producer->socket mapping
+    this.producerToSocket.delete(entry.consumer.producerId)
+
+    this.consumers.delete(consumerId)
+  }
+
   leaveVoice() {
     if (!this.isInVoice) return
 
     this.socket.emit('voice:leave' as string)
 
-    for (const [userId] of this.peers) {
-      this.destroyPeer(userId)
+    // Close all consumers
+    for (const [consumerId] of this.consumers) {
+      this.destroyConsumer(consumerId)
     }
+
+    // Close producer
+    this.producer?.close()
+    this.producer = null
+
+    // Close transports
+    this.sendTransport?.close()
+    this.sendTransport = null
+    this.recvTransport?.close()
+    this.recvTransport = null
+
+    // Clear device
+    this.device = null
+    this.producerToSocket.clear()
 
     if (this.localStream) {
       this.localStream.getTracks().forEach((t) => t.stop())
@@ -469,164 +708,6 @@ export class VoiceManager {
     this.emit('voice-users-change')
   }
 
-  private createPeer(userId: string, initiator: boolean, offer?: RTCSessionDescriptionInit) {
-    if (this.peers.has(userId)) {
-      this.destroyPeer(userId)
-    }
-
-    const streamToSend = this.processedStream || this.localStream
-    if (!streamToSend) return
-
-    const config = AUDIO_QUALITY_PRESETS[this.settings.audioQuality]
-
-    const peer = new SimplePeer({
-      initiator,
-      stream: streamToSend,
-      trickle: true,
-      config: {
-        iceServers: this.iceServers,
-      },
-      sdpTransform: (sdp: string) => applyOpusSdpTransform(sdp, config),
-    })
-
-    const audioEl = new Audio()
-    audioEl.autoplay = true
-
-    const analyser = this.audioContext!.createAnalyser()
-    analyser.fftSize = 2048
-    const gainNode = this.audioContext!.createGain()
-    gainNode.gain.value = this.settings.outputVolume / 100
-
-    const conn: PeerConnection = {
-      peer,
-      audioEl,
-      analyser,
-      gainNode,
-      sourceNode: null,
-      outputHighPass: null,
-      outputCompressor: null,
-      vadBuffer: new Float32Array(new ArrayBuffer(2048 * 4)),
-      holdFrames: 0,
-      wasSpeaking: false,
-    }
-    this.peers.set(userId, conn)
-
-    peer.on('signal', (signalData: SimplePeer.SignalData) => {
-      if (signalData.type === 'offer') {
-        this.socket.emit('voice:offer' as string, { to: userId, offer: signalData })
-      } else if (signalData.type === 'answer') {
-        this.socket.emit('voice:answer' as string, { to: userId, answer: signalData })
-      } else if ('candidate' in signalData && signalData.candidate) {
-        this.socket.emit('voice:ice-candidate' as string, { to: userId, candidate: signalData.candidate })
-      }
-    })
-
-    peer.on('stream', (stream: MediaStream) => {
-      audioEl.srcObject = stream
-
-      // Output processing: HighPass(60Hz) → Compressor → GainNode → Analyser → Destination
-      try {
-        if (this.audioContext!.state === 'suspended') {
-          this.audioContext!.resume()
-        }
-        const source = this.audioContext!.createMediaStreamSource(stream)
-        conn.sourceNode = source
-
-        // Output high-pass filter (60Hz) — protects from pops and rumble
-        const outputHP = this.audioContext!.createBiquadFilter()
-        outputHP.type = 'highpass'
-        outputHP.frequency.value = 60
-        outputHP.Q.value = 0.707
-        conn.outputHighPass = outputHP
-
-        // Output compressor — prevents volume spikes from unprocessed peers
-        const outputComp = this.audioContext!.createDynamicsCompressor()
-        outputComp.threshold.value = -20
-        outputComp.ratio.value = 3
-        outputComp.knee.value = 10
-        outputComp.attack.value = 0.003
-        outputComp.release.value = 0.15
-        conn.outputCompressor = outputComp
-
-        source.connect(outputHP)
-        outputHP.connect(outputComp)
-        outputComp.connect(gainNode)
-        gainNode.connect(analyser)
-        analyser.connect(this.audioContext!.destination)
-
-        // Mute HTML audio element — Web Audio API handles playback
-        audioEl.muted = true
-      } catch (e) {
-        console.warn('Failed to setup audio processing for peer, falling back to audio element:', e)
-      }
-
-      this.startRemoteVAD()
-    })
-
-    peer.on('error', (err: Error) => {
-      console.warn(`Peer connection error with ${userId}:`, err.message)
-      this.destroyPeer(userId)
-    })
-
-    peer.on('close', () => {
-      this.destroyPeer(userId)
-      this.speakingUsers.delete(userId)
-      this.emit('speaking-change')
-    })
-
-    peer.on('connect', () => {
-      try {
-        const pc = (peer as unknown as { _pc: RTCPeerConnection })._pc
-
-        // Set encoding parameters from preset
-        for (const sender of pc.getSenders()) {
-          if (sender.track?.kind === 'audio') {
-            const params = sender.getParameters()
-            if (params.encodings?.length) {
-              params.encodings[0].maxBitrate = config.bitrate
-              params.encodings[0].priority = 'high'
-              // networkPriority may not be in TS types but is in the spec
-              ;(params.encodings[0] as Record<string, unknown>).networkPriority = 'high'
-              sender.setParameters(params).catch(() => {})
-            }
-          }
-        }
-
-        // Jitter buffer hint for low-latency playback
-        for (const receiver of pc.getReceivers()) {
-          if (receiver.track?.kind === 'audio') {
-            ;(receiver as unknown as Record<string, unknown>).playoutDelayHint = 0.05
-          }
-        }
-      } catch {
-        // Non-critical; SDP transform already handles quality
-      }
-    })
-
-    if (offer) {
-      peer.signal(offer as SimplePeer.SignalData)
-    }
-  }
-
-  private destroyPeer(userId: string) {
-    const conn = this.peers.get(userId)
-    if (!conn) return
-
-    try {
-      conn.sourceNode?.disconnect()
-      conn.outputHighPass?.disconnect()
-      conn.outputCompressor?.disconnect()
-      conn.gainNode.disconnect()
-      conn.analyser.disconnect()
-      conn.peer.destroy()
-      conn.audioEl.srcObject = null
-    } catch {
-      // Ignore cleanup errors
-    }
-
-    this.peers.delete(userId)
-  }
-
   setMuted(muted: boolean) {
     if (!this.isInVoice) return
     // If push-to-talk is enabled, don't allow manual unmute
@@ -634,6 +715,16 @@ export class VoiceManager {
 
     this.isMuted = muted
     this.localStream?.getAudioTracks().forEach((t) => (t.enabled = !muted))
+
+    // Pause/resume producer on server to avoid forwarding silent audio
+    if (muted) {
+      this.producer?.pause()
+      this.socket.emit('voice:pause-producer' as string)
+    } else {
+      this.producer?.resume()
+      this.socket.emit('voice:resume-producer' as string)
+    }
+
     this.emit('muted-change')
   }
 
@@ -647,16 +738,18 @@ export class VoiceManager {
   }
 
   setVolume(userId: string, volume: number) {
-    const conn = this.peers.get(userId)
-    if (conn) {
-      conn.gainNode.gain.value = volume / 100
+    // Find consumer entry for this userId
+    for (const [, entry] of this.consumers) {
+      if (entry.socketId === userId) {
+        entry.gainNode.gain.value = volume / 100
+      }
     }
   }
 
   setOutputVolume(volume: number) {
     this.settings.outputVolume = volume
-    for (const [, conn] of this.peers) {
-      conn.gainNode.gain.value = volume / 100
+    for (const [, entry] of this.consumers) {
+      entry.gainNode.gain.value = volume / 100
     }
   }
 
@@ -672,7 +765,6 @@ export class VoiceManager {
     if (!this.isInVoice || !this.localStream) return
 
     // Switching mics may change sample rate — safest to do a full reconnect
-    // which rebuilds the entire audio pipeline at the new mic's rate
     await this.reconnectWithNewSettings()
   }
 
@@ -737,6 +829,8 @@ export class VoiceManager {
     if (this.isInVoice) {
       this.isMuted = true
       this.localStream?.getAudioTracks().forEach((t) => (t.enabled = false))
+      this.producer?.pause()
+      this.socket.emit('voice:pause-producer' as string)
       this.emit('muted-change')
     }
   }
@@ -750,6 +844,8 @@ export class VoiceManager {
       this.pttKeyDown = true
       this.isMuted = false
       this.localStream?.getAudioTracks().forEach((t) => (t.enabled = true))
+      this.producer?.resume()
+      this.socket.emit('voice:resume-producer' as string)
       this.emit('muted-change')
     }
   }
@@ -760,6 +856,8 @@ export class VoiceManager {
       this.pttKeyDown = false
       this.isMuted = true
       this.localStream?.getAudioTracks().forEach((t) => (t.enabled = false))
+      this.producer?.pause()
+      this.socket.emit('voice:pause-producer' as string)
       this.emit('muted-change')
     }
   }
@@ -769,50 +867,52 @@ export class VoiceManager {
       this.pttKeyDown = false
       this.isMuted = true
       this.localStream?.getAudioTracks().forEach((t) => (t.enabled = false))
+      this.producer?.pause()
+      this.socket.emit('voice:pause-producer' as string)
       this.emit('muted-change')
     }
   }
 
   // ——— VAD (Voice Activity Detection) ———
 
-  // RMS-based VAD for remote peers with hysteresis
+  // RMS-based VAD for remote consumers with hysteresis
   private startRemoteVAD() {
     if (this.vadIntervalId) return
 
     this.vadIntervalId = setInterval(() => {
       let changed = false
 
-      for (const [userId, conn] of this.peers) {
-        conn.analyser.getFloatTimeDomainData(conn.vadBuffer)
+      for (const [, entry] of this.consumers) {
+        entry.analyser.getFloatTimeDomainData(entry.vadBuffer)
 
         // Calculate RMS (true signal power)
         let sumSquares = 0
-        for (let i = 0; i < conn.vadBuffer.length; i++) {
-          sumSquares += conn.vadBuffer[i] * conn.vadBuffer[i]
+        for (let i = 0; i < entry.vadBuffer.length; i++) {
+          sumSquares += entry.vadBuffer[i] * entry.vadBuffer[i]
         }
-        const rms = Math.sqrt(sumSquares / conn.vadBuffer.length)
+        const rms = Math.sqrt(sumSquares / entry.vadBuffer.length)
 
         // Hysteresis: higher threshold to start, lower to stop
         let isSpeaking: boolean
-        if (conn.wasSpeaking) {
+        if (entry.wasSpeaking) {
           isSpeaking = rms > SILENCE_THRESHOLD
         } else {
           isSpeaking = rms > SPEECH_THRESHOLD
         }
 
         if (isSpeaking) {
-          conn.holdFrames = HOLD_FRAMES
-          if (!conn.wasSpeaking) {
-            conn.wasSpeaking = true
-            this.speakingUsers.add(userId)
+          entry.holdFrames = HOLD_FRAMES
+          if (!entry.wasSpeaking) {
+            entry.wasSpeaking = true
+            this.speakingUsers.add(entry.socketId)
             changed = true
           }
         } else {
-          if (conn.holdFrames > 0) {
-            conn.holdFrames--
-          } else if (conn.wasSpeaking) {
-            conn.wasSpeaking = false
-            this.speakingUsers.delete(userId)
+          if (entry.holdFrames > 0) {
+            entry.holdFrames--
+          } else if (entry.wasSpeaking) {
+            entry.wasSpeaking = false
+            this.speakingUsers.delete(entry.socketId)
             changed = true
           }
         }
@@ -933,7 +1033,7 @@ export class VoiceManager {
   getSpeakingUsers() { return new Set(this.speakingUsers) }
   getVoiceUsers() { return new Set(this.voiceUsers) }
   getSettings() { return { ...this.settings } }
-  getPeerCount() { return this.peers.size }
+  getPeerCount() { return this.consumers.size }
 
   async getInputDevices(): Promise<MediaDeviceInfo[]> {
     try {
@@ -946,12 +1046,10 @@ export class VoiceManager {
 
   destroy() {
     this.leaveVoice()
-    this.socket.off('voice:active-users' as string)
     this.socket.off('voice:user-joined' as string)
     this.socket.off('voice:user-left' as string)
-    this.socket.off('voice:offer' as string)
-    this.socket.off('voice:answer' as string)
-    this.socket.off('voice:ice-candidate' as string)
+    this.socket.off('voice:new-producer' as string)
+    this.socket.off('voice:producer-closed' as string)
     this.listeners.clear()
   }
 }

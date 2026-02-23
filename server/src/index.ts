@@ -19,6 +19,23 @@ import {
   getTotalUsers,
 } from './rooms.js';
 import type { ClientToServerEvents, ServerToClientEvents, QueueItem } from './types.js';
+import {
+  createWorkers,
+  getOrCreateRouter,
+  getRtpCapabilities,
+  createWebRtcTransport,
+  connectTransport,
+  produce,
+  consume,
+  resumeConsumer,
+  pauseProducer,
+  resumeProducer,
+  removePeer,
+  getExistingProducers,
+  cleanupRoom,
+  ensurePeer,
+} from './mediasoup.js';
+import type { DtlsParameters, MediaKind, RtpCapabilities, RtpParameters } from 'mediasoup/node/lib/types.js';
 
 const app = express();
 const server = createServer(app);
@@ -502,34 +519,123 @@ io.on('connection', (socket) => {
     }
   })
 
-  // --- Voice signaling ---
-  socket.on('voice:join', () => {
+  // --- Voice signaling (mediasoup SFU) ---
+  socket.on('voice:join', async (callback) => {
+    console.log(`[voice:join] ${socket.id}`);
     const room = getUserRoom(socket.id);
-    if (!room) return;
+    if (!room) { console.log(`[voice:join] ${socket.id} — no room`); return; }
+
+    const router = await getOrCreateRouter(room.id);
+    ensurePeer(room.id, socket.id);
 
     room.voiceUsers.add(socket.id);
     socket.to(room.id).emit('voice:user-joined', { userId: socket.id });
-    socket.emit('voice:active-users', { userIds: Array.from(room.voiceUsers).filter((id) => id !== socket.id) });
+
+    const existingProducers = getExistingProducers(room.id, socket.id);
+    console.log(`[voice:join] ${socket.id} — existing producers:`, existingProducers.length);
+    callback({
+      rtpCapabilities: router.rtpCapabilities,
+      existingProducers,
+    });
   });
 
   socket.on('voice:leave', () => {
+    console.log(`[voice:leave] ${socket.id}`);
     const room = getUserRoom(socket.id);
     if (!room) return;
 
+    const closedProducerId = removePeer(room.id, socket.id);
     room.voiceUsers.delete(socket.id);
     socket.to(room.id).emit('voice:user-left', { userId: socket.id });
+
+    if (closedProducerId) {
+      socket.to(room.id).emit('voice:producer-closed', {
+        socketId: socket.id,
+        producerId: closedProducerId,
+      });
+    }
+
+    cleanupRoom(room.id);
   });
 
-  socket.on('voice:offer', (data) => {
-    io.to(data.to).emit('voice:offer', { from: socket.id, offer: data.offer });
+  socket.on('voice:create-send-transport', async (callback) => {
+    const room = getUserRoom(socket.id);
+    if (!room) { callback(null); return; }
+
+    const params = await createWebRtcTransport(room.id, socket.id, 'send');
+    callback(params);
   });
 
-  socket.on('voice:answer', (data) => {
-    io.to(data.to).emit('voice:answer', { from: socket.id, answer: data.answer });
+  socket.on('voice:create-recv-transport', async (callback) => {
+    console.log(`[voice:create-recv-transport] ${socket.id}`);
+    const room = getUserRoom(socket.id);
+    if (!room) { console.log(`[voice:create-recv-transport] ${socket.id} — no room`); callback(null); return; }
+
+    const params = await createWebRtcTransport(room.id, socket.id, 'recv');
+    console.log(`[voice:create-recv-transport] ${socket.id} — created:`, !!params);
+    callback(params);
   });
 
-  socket.on('voice:ice-candidate', (data) => {
-    io.to(data.to).emit('voice:ice-candidate', { from: socket.id, candidate: data.candidate });
+  socket.on('voice:connect-transport', async (data, callback) => {
+    console.log(`[voice:connect-transport] ${socket.id} transport=${data.transportId}`);
+    const room = getUserRoom(socket.id);
+    if (!room) { callback({ connected: false }); return; }
+
+    const ok = await connectTransport(room.id, socket.id, data.transportId, data.dtlsParameters as DtlsParameters);
+    console.log(`[voice:connect-transport] ${socket.id} — connected:`, ok);
+    callback({ connected: ok });
+  });
+
+  socket.on('voice:produce', async (data, callback) => {
+    console.log(`[voice:produce] ${socket.id} kind=${data.kind}`);
+    const room = getUserRoom(socket.id);
+    if (!room) { callback({ producerId: null }); return; }
+
+    const producerId = await produce(room.id, socket.id, data.kind as MediaKind, data.rtpParameters as RtpParameters);
+    console.log(`[voice:produce] ${socket.id} — producerId:`, producerId);
+    callback({ producerId });
+
+    if (producerId) {
+      console.log(`[voice:produce] notifying room ${room.id} of new producer`);
+      socket.to(room.id).emit('voice:new-producer', {
+        socketId: socket.id,
+        producerId,
+      });
+    }
+  });
+
+  socket.on('voice:consume', async (data, callback) => {
+    console.log(`[voice:consume] ${socket.id} producerId=${data.producerId}`);
+    const room = getUserRoom(socket.id);
+    if (!room) { console.log(`[voice:consume] ${socket.id} — no room`); callback(null); return; }
+
+    const result = await consume(room.id, socket.id, data.producerId, data.rtpCapabilities as RtpCapabilities);
+    console.log(`[voice:consume] ${socket.id} — result:`, result ? `consumerId=${result.id}` : 'null');
+    callback(result);
+  });
+
+  socket.on('voice:resume-consumer', async (data, callback) => {
+    console.log(`[voice:resume-consumer] ${socket.id} consumerId=${data.consumerId}`);
+    const room = getUserRoom(socket.id);
+    if (!room) { callback({ resumed: false }); return; }
+
+    const ok = await resumeConsumer(room.id, socket.id, data.consumerId);
+    console.log(`[voice:resume-consumer] ${socket.id} — resumed:`, ok);
+    callback({ resumed: ok });
+  });
+
+  socket.on('voice:pause-producer', () => {
+    console.log(`[voice:pause-producer] ${socket.id}`);
+    const room = getUserRoom(socket.id);
+    if (!room) return;
+    pauseProducer(room.id, socket.id);
+  });
+
+  socket.on('voice:resume-producer', () => {
+    console.log(`[voice:resume-producer] ${socket.id}`);
+    const room = getUserRoom(socket.id);
+    if (!room) return;
+    resumeProducer(room.id, socket.id);
   });
 
   // --- Screen share signaling ---
@@ -577,12 +683,22 @@ io.on('connection', (socket) => {
   });
 
   function handleDisconnect() {
-    // Clean up voice before leaving room
+    // Clean up voice + mediasoup before leaving room
     const roomBeforeLeave = getUserRoom(socket.id);
     if (roomBeforeLeave) {
       if (roomBeforeLeave.voiceUsers.has(socket.id)) {
+        const closedProducerId = removePeer(roomBeforeLeave.id, socket.id);
         roomBeforeLeave.voiceUsers.delete(socket.id);
         socket.to(roomBeforeLeave.id).emit('voice:user-left', { userId: socket.id });
+
+        if (closedProducerId) {
+          socket.to(roomBeforeLeave.id).emit('voice:producer-closed', {
+            socketId: socket.id,
+            producerId: closedProducerId,
+          });
+        }
+
+        cleanupRoom(roomBeforeLeave.id);
       }
 
       // Clean up screen share if this user was sharing
@@ -632,6 +748,13 @@ setInterval(() => {
 }, 3000);
 
 const PORT = parseInt(process.env.PORT || '3001', 10);
-server.listen(PORT, '0.0.0.0', () => {
-  console.log(`WatchParty server running on port ${PORT}`);
+
+// Initialize mediasoup workers, then start HTTP server
+createWorkers().then(() => {
+  server.listen(PORT, '0.0.0.0', () => {
+    console.log(`WatchParty server running on port ${PORT}`);
+  });
+}).catch((err) => {
+  console.error('Failed to create mediasoup workers:', err);
+  process.exit(1);
 });

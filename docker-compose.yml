@@ -7,6 +7,9 @@ services:
     build: ./server
     container_name: watchparty-server
     restart: unless-stopped
+    ports:
+      - "40000-40200:40000-40200/udp"
+      - "40000-40200:40000-40200/tcp"
     environment:
       - NODE_ENV=production
       - PORT=3001
@@ -14,6 +17,10 @@ services:
       - TURN_URL=${TURN_URL:-}
       - TURN_USERNAME=${TURN_USERNAME:-}
       - TURN_CREDENTIAL=${TURN_CREDENTIAL:-}
+      - MEDIASOUP_ANNOUNCED_IP=${MEDIASOUP_ANNOUNCED_IP:-}
+      - MEDIASOUP_MIN_PORT=40000
+      - MEDIASOUP_MAX_PORT=40200
+      - MEDIASOUP_NUM_WORKERS=${MEDIASOUP_NUM_WORKERS:-1}
     networks:
       - watchparty
     healthcheck:
