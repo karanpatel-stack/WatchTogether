@@ -338,7 +338,7 @@ export function getExistingProducers(
   return result;
 }
 
-/** Clean up room router when room empties */
+/** Clean up room router when room empties AND YESwewewe*/
 export function cleanupRoom(roomId: string): void {
   const room = rooms.get(roomId);
   if (!room) return;
