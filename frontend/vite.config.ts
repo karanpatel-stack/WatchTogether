@@ -1,8 +1,17 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { nodePolyfills } from 'vite-plugin-node-polyfills'
+import { execSync } from 'child_process'
+
+const commitHash = (() => {
+  try { return execSync('git rev-parse --short=6 HEAD').toString().trim() }
+  catch { return 'unknown' }
+})()
 
 export default defineConfig({
+  define: {
+    __COMMIT_HASH__: JSON.stringify(commitHash),
+  },
   plugins: [
     react(),
     nodePolyfills({

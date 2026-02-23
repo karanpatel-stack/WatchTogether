@@ -45,6 +45,9 @@ export default function RoomHeader({ roomId, isHost, userCount, onLeave, livingR
           <span className="text-sm font-bold text-white tracking-tight">
             WATCH<span className="text-accent-500">PARTY</span>
           </span>
+          <span className="hidden sm:inline text-[9px] font-mono text-white/15 select-all" title="Build version">
+            {__COMMIT_HASH__}
+          </span>
         </div>
 
         <div className="h-5 w-px bg-white/[0.08]" />

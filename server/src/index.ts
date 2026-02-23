@@ -67,6 +67,25 @@ app.get('/api/ice-servers', (_req, res) => {
   res.json({ iceServers });
 });
 
+// Active rooms lobby (development only)
+app.get('/api/rooms', (_req, res) => {
+  if (process.env.DISPLAY_LOBBY_DEV !== 'true') {
+    res.json({ enabled: false });
+    return;
+  }
+
+  const rooms = getAllRooms();
+  const summary = Array.from(rooms.values()).map((room) => ({
+    id: room.id,
+    userCount: room.users.size,
+    users: Array.from(room.users.values()).slice(0, 4).map((u) => u.name),
+    videoTitle: '',
+    videoUrl: room.videoUrl,
+  }));
+
+  res.json({ enabled: true, rooms: summary });
+});
+
 // --- YouTube Comments Proxy via Invidious ---
 const DEFAULT_INVIDIOUS_INSTANCES = [
   'vid.puffyan.us',
