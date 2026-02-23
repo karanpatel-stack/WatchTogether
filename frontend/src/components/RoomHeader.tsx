@@ -45,9 +45,6 @@ export default function RoomHeader({ roomId, isHost, userCount, onLeave, livingR
           <span className="text-sm font-bold text-white tracking-tight">
             WATCH<span className="text-accent-500">PARTY</span>
           </span>
-          <span className="hidden sm:inline text-[9px] font-mono text-white/15 select-all" title="Build version">
-            {__COMMIT_HASH__}
-          </span>
         </div>
 
         <div className="h-5 w-px bg-white/[0.08]" />
@@ -147,6 +144,10 @@ export default function RoomHeader({ roomId, isHost, userCount, onLeave, livingR
       </div>
 
       <div className="flex items-center gap-3">
+        <span className="hidden sm:inline text-[9px] font-mono text-white/15 select-all" title="Build version">
+          {__COMMIT_HASH__}
+        </span>
+
         <button
           onClick={onToggleLivingRoom}
           title={livingRoomMode ? 'Exit Theatre mode' : 'Theatre mode'}

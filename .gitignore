@@ -1,11 +1,75 @@
+# ─── Dependencies ────────────────────────────────────────────────────────────
 node_modules/
+.pnp
+.pnp.js
+.yarn/install-state.gz
+
+# ─── Build output ─────────────────────────────────────────────────────────────
 dist/
+build/
+out/
+
+# ─── TypeScript ───────────────────────────────────────────────────────────────
+*.tsbuildinfo
+
+# ─── Environment / secrets ────────────────────────────────────────────────────
 .env
+.env.*
+!.env.example
+
+# ─── Logs ─────────────────────────────────────────────────────────────────────
 *.log
+*.log.*
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ─── OS ───────────────────────────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# ─── Editors / IDEs ───────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+*.sublime-project
+*.sublime-workspace
+.project
+.classpath
+.settings/
+
+# ─── Vite / frontend tooling cache ────────────────────────────────────────────
+.vite/
+frontend/.vite/
+
+# ─── Test / coverage ──────────────────────────────────────────────────────────
+coverage/
+.nyc_output/
+
+# ─── Docker ───────────────────────────────────────────────────────────────────
+.docker/
+
+# ─── Misc project artifacts ───────────────────────────────────────────────────
+*.zip
+*.tar.gz
+*.tgz
+
+# ─── Python (from mediasoup native build leftovers) ───────────────────────────
 .venv/
 __pycache__/
-.DS_Store
-Thumbs.db
-.idea/
+*.py[cod]
+
+# ─── Claude Code ──────────────────────────────────────────────────────────────
 .claude/
-*.zip
