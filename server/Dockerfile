@@ -1,17 +1,15 @@
-FROM node:22-alpine AS build
-RUN apk add --no-cache python3 py3-pip make g++ linux-headers
+FROM node:22-slim AS build
+RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY package.json package-lock.json* ./
 RUN npm ci
 COPY . .
 RUN npm run build
 
-FROM node:22-alpine
+FROM node:22-slim
 WORKDIR /app
 COPY package.json package-lock.json* ./
-RUN apk add --no-cache python3 py3-pip make g++ linux-headers && \
-    npm ci --omit=dev && \
-    apk del python3 py3-pip make g++ linux-headers
+RUN npm ci --omit=dev
 COPY --from=build /app/dist ./dist
 EXPOSE 3001
 EXPOSE 40000-40200/udp
