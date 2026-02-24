@@ -58,8 +58,9 @@ app.get('/api/ice-servers', (_req, res) => {
   const turnCred = process.env.TURN_CREDENTIAL;
 
   if (turnUrl && turnUser && turnCred) {
+    const urls = turnUrl.includes(',') ? turnUrl.split(',').map(u => u.trim()) : turnUrl;
     iceServers.push({
-      urls: turnUrl,
+      urls,
       username: turnUser,
       credential: turnCred,
     });
