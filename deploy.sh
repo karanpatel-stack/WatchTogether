@@ -10,5 +10,5 @@ else
   echo "COMMIT_HASH=$HASH" >> "$ENV_FILE"
 fi
 echo "Deploying commit $HASH..."
-docker compose up -d --build
+docker compose down && docker compose up -d --build
 echo "Done."
