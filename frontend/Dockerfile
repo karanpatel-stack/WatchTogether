@@ -1,4 +1,6 @@
 FROM node:20-alpine AS build
+ARG COMMIT_HASH=unknown
+ENV COMMIT_HASH=$COMMIT_HASH
 WORKDIR /app
 COPY package.json package-lock.json* ./
 RUN npm ci

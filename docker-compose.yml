@@ -14,6 +14,7 @@ services:
       - TURN_URL=${TURN_URL:-}
       - TURN_USERNAME=${TURN_USERNAME:-}
       - TURN_CREDENTIAL=${TURN_CREDENTIAL:-}
+      - DISPLAY_LOBBY_DEV=${DISPLAY_LOBBY_DEV:-false}
     networks:
       - watchparty
     healthcheck:
@@ -23,7 +24,10 @@ services:
       retries: 3
 
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      args:
+        - COMMIT_HASH=${COMMIT_HASH:-unknown}
     container_name: watchparty-frontend
     restart: unless-stopped
     depends_on:

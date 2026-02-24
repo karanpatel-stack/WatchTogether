@@ -5,7 +5,7 @@ import { execSync } from 'child_process'
 
 const commitHash = (() => {
   try { return execSync('git rev-parse --short=6 HEAD').toString().trim() }
-  catch { return 'unknown' }
+  catch { return process.env.COMMIT_HASH || 'unknown' }
 })()
 
 export default defineConfig({
