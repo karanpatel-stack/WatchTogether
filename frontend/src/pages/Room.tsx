@@ -59,6 +59,7 @@ function RoomContent() {
   const [dimLevel, setDimLevel] = useState(0)
   const [queue, setQueue] = useState<QueueItem[]>([])
   const [heartbeatState, setHeartbeatState] = useState<VideoState | null>(null)
+  const [isHidden, setIsHidden] = useState(false)
 
   const myUserId = useRef(localStorage.getItem('wp_userId') || '')
   const connectedRef = useRef(false)
@@ -101,6 +102,7 @@ function RoomContent() {
     setMessages(state.messages)
     setQueue(state.queue)
     setInitialState(state.screenSharerId)
+    setIsHidden(state.isHidden)
     setConnected(true)
     connectedRef.current = true
   }, [setInitialState])
@@ -213,6 +215,10 @@ function RoomContent() {
       setMessages((prev) => prev.filter((m) => m.id !== messageId))
     })
 
+    socket.on('room:hidden-changed', ({ isHidden: hidden }: { isHidden: boolean }) => {
+      setIsHidden(hidden)
+    })
+
     socket.on('error', ({ message }) => {
       console.error('Server error:', message)
     })
@@ -225,6 +231,7 @@ function RoomContent() {
       socket.off('room:user-joined')
       socket.off('room:user-left')
       socket.off('room:host-changed')
+      socket.off('room:hidden-changed')
       socket.off('video:state-update')
       socket.off('video:load')
       socket.off('video:heartbeat')
@@ -420,6 +427,8 @@ function RoomContent() {
         livingRoomMode={livingRoomMode}
         onToggleLivingRoom={() => setLivingRoomMode((m) => !m)}
         dimLevel={dimLevel}
+        isHidden={isHidden}
+        onToggleHidden={() => socket.emit('room:toggle-hidden')}
       />
 
       <div className="flex-1 flex min-h-0">

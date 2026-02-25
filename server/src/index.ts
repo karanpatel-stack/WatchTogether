@@ -77,13 +77,15 @@ app.get('/api/rooms', (_req, res) => {
   }
 
   const rooms = getAllRooms();
-  const summary = Array.from(rooms.values()).map((room) => ({
-    id: room.id,
-    userCount: room.users.size,
-    users: Array.from(room.users.values()).slice(0, 4).map((u) => u.name),
-    videoTitle: '',
-    videoUrl: room.videoUrl,
-  }));
+  const summary = Array.from(rooms.values())
+    .filter((room) => !room.isHidden)
+    .map((room) => ({
+      id: room.id,
+      userCount: room.users.size,
+      users: Array.from(room.users.values()).slice(0, 4).map((u) => u.name),
+      videoTitle: '',
+      videoUrl: room.videoUrl,
+    }));
 
   res.json({ enabled: true, rooms: summary });
 });
@@ -189,6 +191,7 @@ io.on('connection', (socket) => {
       messages: room.messages,
       queue: room.queue,
       screenSharerId: room.screenSharerId,
+      isHidden: room.isHidden,
     });
   });
 
@@ -213,6 +216,7 @@ io.on('connection', (socket) => {
       messages: room.messages,
       queue: room.queue,
       screenSharerId: room.screenSharerId,
+      isHidden: room.isHidden,
     });
 
     socket.to(room.id).emit('room:user-joined', { user });
@@ -225,6 +229,13 @@ io.on('connection', (socket) => {
     if (systemMsg) {
       io.to(room.id).emit('chat:message', systemMsg);
     }
+  });
+
+  socket.on('room:toggle-hidden', () => {
+    const room = getUserRoom(socket.id);
+    if (!room) return;
+    room.isHidden = !room.isHidden;
+    io.to(room.id).emit('room:hidden-changed', { isHidden: room.isHidden });
   });
 
   socket.on('room:leave', () => {

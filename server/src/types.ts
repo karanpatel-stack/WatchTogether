@@ -31,6 +31,7 @@ export interface Room {
   createdAt: number;
   voiceUsers: Set<string>;
   screenSharerId: string | null;
+  isHidden: boolean;
 }
 
 export interface ChatMessage {
@@ -76,6 +77,7 @@ export interface ClientToServerEvents {
   'voice:offer': (data: { to: string; offer: RTCSessionDescriptionInit }) => void;
   'voice:answer': (data: { to: string; answer: RTCSessionDescriptionInit }) => void;
   'voice:ice-candidate': (data: { to: string; candidate: RTCIceCandidateInit }) => void;
+  'room:toggle-hidden': () => void;
   'screen:start': () => void;
   'screen:stop': () => void;
   'screen:offer': (data: { to: string; offer: RTCSessionDescriptionInit }) => void;
@@ -92,7 +94,9 @@ export interface ServerToClientEvents {
     messages: ChatMessage[];
     queue: QueueItem[];
     screenSharerId: string | null;
+    isHidden: boolean;
   }) => void;
+  'room:hidden-changed': (data: { isHidden: boolean }) => void;
   'room:user-joined': (data: { user: User }) => void;
   'room:user-left': (data: { userId: string; userName: string }) => void;
   'room:host-changed': (data: { hostId: string }) => void;

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Tv, Copy, Check, LogOut, Crown, Users, Mic, MicOff, Film, Phone, PhoneOff, Monitor } from 'lucide-react'
+import { Tv, Copy, Check, LogOut, Crown, Users, Mic, MicOff, Film, Phone, PhoneOff, Monitor, EyeOff, Eye } from 'lucide-react'
 import { useVoice } from '../lib/VoiceContext'
 import { useScreenShare } from '../lib/ScreenShareContext'
 import MicLevelMeter from './MicLevelMeter'
@@ -12,9 +12,11 @@ interface Props {
   livingRoomMode: boolean
   onToggleLivingRoom: () => void
   dimLevel: number
+  isHidden: boolean
+  onToggleHidden: () => void
 }
 
-export default function RoomHeader({ roomId, isHost, userCount, onLeave, livingRoomMode, onToggleLivingRoom, dimLevel }: Props) {
+export default function RoomHeader({ roomId, isHost, userCount, onLeave, livingRoomMode, onToggleLivingRoom, dimLevel, isHidden, onToggleHidden }: Props) {
   const [copied, setCopied] = useState(false)
   const { isMuted, isInVoice, toggleMute, joinVoice, leaveVoice, speakingUsers, voiceSettings } = useVoice()
   const { isSharing, isViewing, startSharing, stopSharing } = useScreenShare()
@@ -141,6 +143,19 @@ export default function RoomHeader({ roomId, isHost, userCount, onLeave, livingR
             <span className="hidden sm:inline">Share Screen</span>
           </button>
         )}
+
+        <button
+          onClick={onToggleHidden}
+          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border transition-all text-xs font-medium ${
+            isHidden
+              ? 'bg-amber-500/15 border-amber-500/25 text-amber-400 hover:bg-amber-500/25'
+              : 'bg-white/[0.04] border-white/[0.06] text-white/40 hover:text-white/60 hover:bg-white/[0.06] hover:border-white/[0.1]'
+          }`}
+          title={isHidden ? 'Room is hidden from lobby' : 'Room is visible in lobby'}
+        >
+          {isHidden ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+          <span className="hidden sm:inline">HideRoom</span>
+        </button>
       </div>
 
       <div className="flex items-center gap-3">

@@ -51,6 +51,7 @@ export function createRoom(hostSocketId: string, userName: string): { room: Room
     createdAt: Date.now(),
     voiceUsers: new Set(),
     screenSharerId: null,
+    isHidden: false,
   };
 
   rooms.set(roomId, room);

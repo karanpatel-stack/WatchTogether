@@ -43,4 +43,5 @@ export interface RoomState {
   messages: ChatMessage[];
   queue: QueueItem[];
   screenSharerId: string | null;
+  isHidden: boolean;
 }
