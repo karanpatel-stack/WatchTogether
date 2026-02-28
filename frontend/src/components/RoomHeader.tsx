@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Tv, Copy, Check, LogOut, Crown, Users, Mic, MicOff, Film, Phone, PhoneOff, Monitor, EyeOff, Eye } from 'lucide-react'
+import { createPortal } from 'react-dom'
+import { Tv, Copy, Check, LogOut, Crown, Users, Mic, MicOff, Film, Phone, PhoneOff, Monitor, EyeOff, Eye, AlertTriangle } from 'lucide-react'
 import { useVoice } from '../lib/VoiceContext'
 import { useScreenShare } from '../lib/ScreenShareContext'
 import MicLevelMeter from './MicLevelMeter'
@@ -18,8 +19,18 @@ interface Props {
 
 export default function RoomHeader({ roomId, isHost, userCount, onLeave, livingRoomMode, onToggleLivingRoom, dimLevel, isHidden, onToggleHidden }: Props) {
   const [copied, setCopied] = useState(false)
+  const [showDrmTip, setShowDrmTip] = useState(false)
   const { isMuted, isInVoice, toggleMute, joinVoice, leaveVoice, speakingUsers, voiceSettings } = useVoice()
   const { isSharing, isViewing, startSharing, stopSharing } = useScreenShare()
+
+  const handleShareClick = () => {
+    setShowDrmTip(true)
+  }
+
+  const handleDrmConfirm = () => {
+    setShowDrmTip(false)
+    startSharing()
+  }
 
   const copyRoomCode = () => {
     navigator.clipboard.writeText(roomId)
@@ -28,6 +39,7 @@ export default function RoomHeader({ roomId, isHost, userCount, onLeave, livingR
   }
 
   return (
+    <>
     <header
       className={`flex items-center justify-between px-4 py-3 border-b shadow-[0_1px_20px_rgba(0,0,0,0.3)] transition-[background,border-color] duration-300 ${
         livingRoomMode ? 'border-[#2a1508]/60' : 'border-panel bg-panel backdrop-blur-xl'
@@ -135,7 +147,7 @@ export default function RoomHeader({ roomId, isHost, userCount, onLeave, livingR
           </div>
         ) : (
           <button
-            onClick={startSharing}
+            onClick={handleShareClick}
             className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/[0.04] border border-white/[0.06] text-white/40 hover:text-white/60 hover:bg-white/[0.06] hover:border-white/[0.1] transition-all text-xs font-medium"
             title="Share your screen"
           >
@@ -189,6 +201,43 @@ export default function RoomHeader({ roomId, isHost, userCount, onLeave, livingR
           <span className="hidden sm:inline">Leave</span>
         </button>
       </div>
+
     </header>
+
+    {/* DRM tip modal — portalled to body so it's centered on the full viewport */}
+    {showDrmTip && createPortal(
+      <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+        <div className="bg-[#1a1a2e] border border-white/10 rounded-2xl shadow-[0_8px_48px_rgba(0,0,0,0.6)] max-w-sm w-full mx-4 p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/25 flex items-center justify-center">
+              <AlertTriangle className="w-5 h-5 text-amber-400" />
+            </div>
+            <h3 className="text-sm font-semibold text-white">Before You Share</h3>
+          </div>
+          <p className="text-[13px] text-white/70 leading-relaxed mb-5">
+            Sharing DRM-protected content (Netflix, Amazon Prime, Disney+, etc.)? Viewers may see a <strong className="text-white/90">black screen</strong> due to copy protection.
+          </p>
+          <p className="text-[13px] text-white/70 leading-relaxed mb-6">
+            If using Chrome, to fix this go to <strong className="text-amber-300">Settings &rarr; System</strong> and disable <strong className="text-amber-300">"Use graphics acceleration when available"</strong>, then restart the browser before sharing.
+          </p>
+          <div className="flex gap-3">
+            <button
+              onClick={() => setShowDrmTip(false)}
+              className="flex-1 px-4 py-2 rounded-lg bg-white/[0.06] border border-white/[0.08] text-white/50 hover:text-white/70 hover:bg-white/[0.1] transition-all text-sm font-medium"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleDrmConfirm}
+              className="flex-1 px-4 py-2 rounded-lg bg-accent-600 border border-accent-500/30 text-white hover:bg-accent-500 transition-all text-sm font-medium"
+            >
+              Continue Sharing
+            </button>
+          </div>
+        </div>
+      </div>,
+      document.body
+    )}
+    </>
   )
 }
